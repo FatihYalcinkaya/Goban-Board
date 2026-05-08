@@ -175,23 +175,31 @@ func (m *RootModel) resetState() RootModel {
 	m.oldTitle = ""
 	return *m
 }
-
 func (m *RootModel) syncDimensions() {
 	numCols := len(m.columns)
 	if numCols == 0 {
 		return
 	}
 
-	dynWidth := (m.width / numCols) - 5
+	// Border ve padding farklarını düşerek net genişliği hesapla
+	dynWidth := (m.width / numCols) - 4
 	if dynWidth < 20 {
 		dynWidth = 20
 	}
 
 	for i := range m.columns {
+		// Listenin fiziksel boyutunu ayarla
 		m.columns[i].list.SetSize(dynWidth, m.height-12)
+
+		// --- KRİTİK: Stilleri genişliğe zorla ---
+		// Bu işlem o sağdaki lacivert boşlukları senin gri renginle doldurur
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.
-			Width(dynWidth - 4).
-			MaxWidth(dynWidth - 4)
+			Width(dynWidth).
+			MaxWidth(dynWidth)
+
+		m.columns[i].list.Styles.NoItems = m.columns[i].list.Styles.NoItems.
+			Width(dynWidth).
+			MaxWidth(dynWidth)
 	}
 }
 
@@ -209,9 +217,12 @@ func (m RootModel) View() string {
 	minRequiredWidth := numCols * 25
 	minRequiredHeight := 15
 
+	// Common background style to reuse
+	baseStyle := lipgloss.NewStyle().Background(lipgloss.Color(appBgHex))
+
 	if m.width < minRequiredWidth || m.height < minRequiredHeight {
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-		subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(pinkHex)).Bold(true).Background(lipgloss.Color(appBgHex))
+		subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(grayHex)).Background(lipgloss.Color(appBgHex))
 
 		content := lipgloss.JoinVertical(
 			lipgloss.Center,
@@ -219,29 +230,37 @@ func (m RootModel) View() string {
 			subStyle.Render("Please enlarge to view the board"),
 		)
 
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+		return baseStyle.Width(m.width).Height(m.height).
+			Render(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content))
 	}
 
 	var views []string
-	dynWidth := (m.width / numCols) - 5
+	dynWidth := (m.width / numCols) - 2
 	if dynWidth < 20 {
 		dynWidth = 20
 	}
 
 	for i := range m.columns {
-		// Set Delegate to strip border and handle focused colors
 		d := list.NewDefaultDelegate()
-		d.Styles.NormalTitle = d.Styles.NormalTitle.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("255"))
-		d.Styles.NormalDesc = d.Styles.NormalDesc.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("245"))
-		d.Styles.SelectedTitle = d.Styles.SelectedTitle.BorderLeft(false).PaddingLeft(0).MarginLeft(0)
-		d.Styles.SelectedDesc = d.Styles.SelectedDesc.BorderLeft(false).PaddingLeft(0).MarginLeft(0)
+
+		// --- ITEM RENDERING FIX ---
+		// Items must have the same background as the column to prevent "gaps"
+		itemStyle := lipgloss.NewStyle().
+			Background(lipgloss.Color(appBgHex)).
+			PaddingLeft(0).
+			MarginLeft(0)
+
+		d.Styles.NormalTitle = itemStyle.Copy().Foreground(lipgloss.Color(whiteHex))
+		d.Styles.NormalDesc = itemStyle.Copy().Foreground(lipgloss.Color(grayHex))
+		d.Styles.SelectedTitle = itemStyle.Copy().BorderLeft(false)
+		d.Styles.SelectedDesc = itemStyle.Copy().BorderLeft(false)
 
 		if i == m.focusedColumn {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color("205")).Bold(true)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color("205"))
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color(pinkHex)).Bold(true)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color(pinkHex))
 		} else {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color("255")).Bold(false)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color("245"))
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color(whiteHex)).Bold(false)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color(grayHex))
 		}
 
 		m.columns[i].list.SetDelegate(d)
@@ -255,13 +274,23 @@ func (m RootModel) View() string {
 
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
+	// --- FOOTER LEAKAGE FIX ---
 	var footer string
 	if m.state == inputState {
-		footer = "\n Edit/Add: " + m.input.View()
+		// Ensure the input field background also matches
+		footer = baseStyle.Render("\n Edit/Add: " + m.input.View())
 	} else {
-		footer = helpStyle.Render("\n h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit")
+		// Wrapping the entire footer in baseStyle to kill terminal background
+		footer = baseStyle.Render("\n" + helpStyle.Render(" h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit"))
 	}
 
 	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullUI)
+
+	// Final render with global background wrapper
+	return baseStyle.
+		Width(m.width).
+		Height(m.height).
+		Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullUI),
+		)
 }

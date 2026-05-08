@@ -12,28 +12,34 @@ type Column struct {
 func NewColumn(title string) Column {
 	d := list.NewDefaultDelegate()
 
-	whiteStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		PaddingLeft(0).
-		MarginLeft(0).
-		BorderLeft(false)
+	// Satırların arka planını sabitle
+	itemStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color(appBgHex)).
+		Foreground(lipgloss.Color(whiteHex))
 
-	d.Styles.NormalTitle = whiteStyle
-	d.Styles.SelectedTitle = whiteStyle
-
-	d.Styles.NormalDesc = whiteStyle.Foreground(lipgloss.Color("245"))
-	d.Styles.SelectedDesc = whiteStyle.Foreground(lipgloss.Color("245"))
+	d.Styles.NormalTitle = itemStyle
+	d.Styles.SelectedTitle = itemStyle.Copy().Bold(true)
+	d.Styles.NormalDesc = itemStyle.Copy().Foreground(lipgloss.Color(grayHex))
+	d.Styles.SelectedDesc = itemStyle.Copy().Foreground(lipgloss.Color(grayHex))
 
 	l := list.New([]list.Item{}, d, 0, 0)
 	l.Title = title
 
+	// --- SIZINTI KESİCİ AYARLAR ---
 	l.Styles.Title = lipgloss.NewStyle().
-		Background(lipgloss.Color("62")).
-		Foreground(lipgloss.Color("230")).
+		Background(lipgloss.Color(purpleHex)).
+		Foreground(lipgloss.Color("#ffffff")).
 		Bold(true).
-		Align(lipgloss.Center).
-		Padding(0, 0).
-		Margin(0, 0)
+		Padding(0, 1)
+
+	// O üç noktaların ve "No items" yazısının etrafını boya
+	l.Styles.NoItems = lipgloss.NewStyle().
+		Background(lipgloss.Color(appBgHex)).
+		Foreground(lipgloss.Color(grayHex))
+
+	// Listenin altındaki görünmez yardım alanını da boya (o alttaki sızıntı için)
+	l.Styles.HelpStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color(appBgHex))
 
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)

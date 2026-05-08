@@ -188,7 +188,7 @@ func (m RootModel) View() string {
 
 	if m.width < minRequiredWidth || m.height < minRequiredHeight {
 		errorStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("201")).
+			Foreground(lipgloss.Color("205")).
 			Bold(true)
 
 		subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))

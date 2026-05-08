@@ -43,14 +43,14 @@ type RootModel struct {
 	height        int
 	errMsg        string
 
-	oldTitle       string
-	editingTaskID  int
-	editingDesc    bool
+	oldTitle        string
+	editingTaskID   int
+	editingDesc     bool
 	columnRenameIdx int
 
-	confirmAction  confirmAction
-	confirmTaskID  int
-	confirmColIdx  int
+	confirmAction confirmAction
+	confirmTaskID int
+	confirmColIdx int
 
 	columnNewCount int
 	undoBuffer     []undoItem
@@ -104,7 +104,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					if colIdx >= 0 && colIdx < len(m.columns) {
 						m.columns = append(m.columns[:colIdx], m.columns[colIdx+1:]...)
-						if m.focusedColumn >= len(m.columns) {
+						if len(m.columns) == 0 {
+							m.focusedColumn = 0
+						} else if m.focusedColumn >= len(m.columns) {
 							m.focusedColumn = len(m.columns) - 1
 						}
 						m.syncDimensions()
@@ -144,14 +146,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if err := UpdateTaskDescription(m.editingTaskID, newVal); err != nil {
 							m.errMsg = "Failed to update description"
 						} else {
-						for i, item := range m.columns[m.focusedColumn].list.Items() {
-							t, ok := item.(Task)
-							if ok && t.id == m.editingTaskID {
-								m.columns[m.focusedColumn].list.RemoveItem(i)
-								m.columns[m.focusedColumn].list.InsertItem(i, NewTask(t.id, t.title, newVal))
-								break
+							for i, item := range m.columns[m.focusedColumn].list.Items() {
+								t, ok := item.(Task)
+								if ok && t.id == m.editingTaskID {
+									m.columns[m.focusedColumn].list.RemoveItem(i)
+									m.columns[m.focusedColumn].list.InsertItem(i, NewTask(t.id, t.title, newVal))
+									break
+								}
 							}
-						}
 						}
 						m.editingTaskID = 0
 					case m.columnRenameIdx >= 0:
@@ -176,6 +178,28 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.errMsg = ""
+
+		if len(m.columns) == 0 {
+			switch msg.String() {
+			case "n", "A":
+				m.columnNewCount++
+				title := "New Column"
+				if m.columnNewCount > 1 {
+					title = fmt.Sprintf("New Column %d", m.columnNewCount)
+				}
+				m.columns = append(m.columns, NewColumn(title))
+				m.focusedColumn = 0
+				m.syncDimensions()
+				return m, nil
+			case "?":
+				m.state = helpState
+				return m, nil
+			case "ctrl+c", "q":
+				m.quitting = true
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 
 		if m.columns[m.focusedColumn].list.FilterState() == list.Filtering {
 			var cmd tea.Cmd
@@ -415,22 +439,21 @@ func (m RootModel) View() string {
 	dynWidth := (m.width / numCols) - 2
 
 	for i := range m.columns {
-		d := list.NewDefaultDelegate()
 		itemStyle := lipgloss.NewStyle().Background(appBgHex)
 
-		d.Styles.NormalTitle = itemStyle.Copy().Foreground(whiteHex)
-		d.Styles.NormalDesc = itemStyle.Copy().Foreground(grayHex)
-		d.Styles.SelectedTitle = itemStyle.Copy().BorderLeft(false)
-		d.Styles.SelectedDesc = itemStyle.Copy().BorderLeft(false)
+		m.columns[i].delegate.Styles.NormalTitle = itemStyle.Copy().Foreground(whiteHex)
+		m.columns[i].delegate.Styles.NormalDesc = itemStyle.Copy().Foreground(grayHex)
+		m.columns[i].delegate.Styles.SelectedTitle = itemStyle.Copy().BorderLeft(false)
+		m.columns[i].delegate.Styles.SelectedDesc = itemStyle.Copy().BorderLeft(false)
 
 		if i == m.focusedColumn {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(pinkHex).Bold(true)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(pinkHex)
+			m.columns[i].delegate.Styles.SelectedTitle = m.columns[i].delegate.Styles.SelectedTitle.Foreground(pinkHex).Bold(true)
+			m.columns[i].delegate.Styles.SelectedDesc = m.columns[i].delegate.Styles.SelectedDesc.Foreground(pinkHex)
 		} else {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(whiteHex)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(grayHex)
+			m.columns[i].delegate.Styles.SelectedTitle = m.columns[i].delegate.Styles.SelectedTitle.Foreground(whiteHex)
+			m.columns[i].delegate.Styles.SelectedDesc = m.columns[i].delegate.Styles.SelectedDesc.Foreground(grayHex)
 		}
-		m.columns[i].list.SetDelegate(d)
+		m.columns[i].list.SetDelegate(m.columns[i].delegate)
 
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.Width(dynWidth).MaxWidth(dynWidth)
 

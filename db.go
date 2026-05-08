@@ -47,11 +47,17 @@ func LoadTasksFromDB(m *RootModel) {
 		var title string
 		var desc string
 		var status int
-		if err := rows.Scan(&id, &title, &desc, &status); err == nil {
-			if status >= 0 && status < len(m.columns) {
-				m.columns[status].list.InsertItem(len(m.columns[status].list.Items()), NewTask(id, title, desc))
-			}
+		if err := rows.Scan(&id, &title, &desc, &status); err != nil {
+			log.Printf("Error scanning task row: %v", err)
+			continue
 		}
+		if status >= 0 && status < len(m.columns) {
+			m.columns[status].list.InsertItem(len(m.columns[status].list.Items()), NewTask(id, title, desc))
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating tasks: %v", err)
 	}
 }
 

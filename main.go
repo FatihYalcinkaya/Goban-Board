@@ -2,17 +2,15 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	// Import the pure Go SQLite driver
 	_ "modernc.org/sqlite"
 )
 
 func main() {
-	// Initialize the database and create tables if they don't exist
 	InitDB()
+	defer db.Close()
 
 	ti := textinput.New()
 	ti.Placeholder = "Enter task title..."
@@ -43,6 +41,6 @@ func main() {
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
-		os.Exit(1)
+		return
 	}
 }

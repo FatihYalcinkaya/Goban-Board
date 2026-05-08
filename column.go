@@ -6,13 +6,13 @@ import (
 )
 
 type Column struct {
-	list list.Model
+	list     list.Model
+	delegate list.DefaultDelegate
 }
 
 func NewColumn(title string) Column {
 	d := list.NewDefaultDelegate()
 
-	// Set row background
 	itemStyle := lipgloss.NewStyle().
 		Background(appBgHex).
 		Foreground(whiteHex)
@@ -25,19 +25,16 @@ func NewColumn(title string) Column {
 	l := list.New([]list.Item{}, d, 0, 0)
 	l.Title = title
 
-	// --- LEAK STOPPER SETTINGS ---
 	l.Styles.Title = lipgloss.NewStyle().
 		Background(purpleHex).
 		Foreground(whiteLiteral).
 		Bold(true).
 		Padding(0, 1)
 
-	// Paint around the ellipsis and "No items" text
 	l.Styles.NoItems = lipgloss.NewStyle().
 		Background(appBgHex).
 		Foreground(grayHex)
 
-	// Also paint the invisible help area below the list (for the leak at the bottom)
 	l.Styles.HelpStyle = lipgloss.NewStyle().
 		Background(appBgHex)
 
@@ -45,5 +42,5 @@ func NewColumn(title string) Column {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 
-	return Column{list: l}
+	return Column{list: l, delegate: d}
 }

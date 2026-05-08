@@ -205,9 +205,9 @@ func (m RootModel) View() string {
 	// Footer hazırlığı
 	var footer string
 	if m.state == inputState {
-		footer = "\n Düzenle/Ekle: " + m.input.View()
+		footer = "\n Edit/Add: " + m.input.View()
 	} else {
-		footer = helpStyle.Render("\n h/l: gez • j/k: nav • ctrl+h/l/j/k: taşı • a: ekle • r: rename • d: sil • q: çık")
+		footer = helpStyle.Render("\n h/l: move | j/k: nav | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit")
 	}
 
 	// Her şeyi dikey birleştir

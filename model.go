@@ -188,40 +188,35 @@ func (m RootModel) View() string {
 	}
 
 	for i := range m.columns {
-		// --- RENK DÜZELTMESİ ---
-		// list.Model içindeki unexported delegate hatasını aşmak için
-		// her seferinde taze bir DefaultDelegate oluşturup listeye set ediyoruz.
+		// --- TAM MİNİMAL DELEGAT AYARI ---
 		d := list.NewDefaultDelegate()
+
+		// 1. Ortak Ayarlar: Çizgiyi ve kaymayı her durumda kapat
 		d.Styles.NormalTitle = d.Styles.NormalTitle.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("255"))
 		d.Styles.NormalDesc = d.Styles.NormalDesc.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("245"))
 
+		// Seçili stilin dikey çizgisini (BorderLeft) tamamen siliyoruz
+		d.Styles.SelectedTitle = d.Styles.SelectedTitle.
+			BorderLeft(false).
+			PaddingLeft(0).
+			MarginLeft(0)
+		d.Styles.SelectedDesc = d.Styles.SelectedDesc.
+			BorderLeft(false).
+			PaddingLeft(0).
+			MarginLeft(0)
+
+		// 2. Renk Ayarı: Sadece odaklanılan sütun renkli olsun
 		if i == m.focusedColumn {
-			// Aktif Sütun
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.
-				Foreground(lipgloss.Color("205")).
-				Bold(true).
-				PaddingLeft(0).
-				MarginLeft(0)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.
-				Foreground(lipgloss.Color("205")).
-				PaddingLeft(0).
-				MarginLeft(0)
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color("205")).Bold(true)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color("205"))
 		} else {
-			// Pasif Sütun (Seçili olsa bile beyaz)
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.
-				Foreground(lipgloss.Color("255")).
-				Bold(false).
-				PaddingLeft(0).
-				MarginLeft(0)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.
-				Foreground(lipgloss.Color("245")).
-				PaddingLeft(0).
-				MarginLeft(0)
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color("255")).Bold(false)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color("245"))
 		}
 
-		// Delegatı güncelle
 		m.columns[i].list.SetDelegate(d)
 
+		// Sütun Stili
 		style := columnStyle.Width(dynWidth)
 		if i == m.focusedColumn {
 			style = focusedStyle.Width(dynWidth)
@@ -242,4 +237,3 @@ func (m RootModel) View() string {
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullUI)
 }
-

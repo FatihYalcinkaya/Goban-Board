@@ -3,22 +3,21 @@ package main
 import (
 	"fmt"
 	"os"
-
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
+	ti := textinput.New()
+	ti.Placeholder = "Task Title..."
+	ti.Focus()
+
 	todo := NewColumn("TODO")
-	todo.list.InsertItem(0, NewTask("Build TUI", "Use Go and Bubble Tea"))
-	todo.list.InsertItem(1, NewTask("Configure Neovim", "Update Lua plugins"))
-
-	inProg := NewColumn("IN PROGRESS")
-	inProg.list.InsertItem(0, NewTask("Refactoring", "Fixing unused imports"))
-
-	done := NewColumn("DONE")
-
+	todo.list.InsertItem(0, NewTask("Buy Coffee", "Need fuel"))
+	
 	m := RootModel{
-		columns: []Column{todo, inProg, done},
+		columns: []Column{todo, NewColumn("DONE")},
+		input:   ti,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

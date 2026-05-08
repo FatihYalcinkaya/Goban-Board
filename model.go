@@ -213,42 +213,31 @@ func (m RootModel) View() string {
 		return "No columns"
 	}
 
-	// UI Guard for screen size
+	// 1. ANA YÜZEY STİLİ (Surface)
+	// Terminalin her hücresini senin renginle mühürler
+	surfaceStyle := lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Background(appBgHex).
+		Align(lipgloss.Left, lipgloss.Top)
+
+	// UI Guard
 	minRequiredWidth := numCols * 25
-	minRequiredHeight := 15
-
-	// Common background style to reuse
-	baseStyle := lipgloss.NewStyle().Background(appBgHex)
-
-	if m.width < minRequiredWidth || m.height < minRequiredHeight {
-		errorStyle := lipgloss.NewStyle().Foreground(pinkHex).Bold(true).Background(appBgHex)
-		subStyle := lipgloss.NewStyle().Foreground(grayHex).Background(appBgHex)
-
-		content := lipgloss.JoinVertical(
+	if m.width < minRequiredWidth || m.height < 15 {
+		errorContent := lipgloss.JoinVertical(
 			lipgloss.Center,
-			errorStyle.Render("TERMINAL TOO SMALL"),
-			subStyle.Render("Please enlarge to view the board"),
+			lipgloss.NewStyle().Foreground(pinkHex).Bold(true).Background(appBgHex).Render("TERMINAL TOO SMALL"),
+			lipgloss.NewStyle().Foreground(grayHex).Background(appBgHex).Render("Please enlarge the window"),
 		)
-
-		return baseStyle.Width(m.width).Height(m.height).
-			Render(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content))
+		return surfaceStyle.Align(lipgloss.Center, lipgloss.Center).Render(errorContent)
 	}
 
 	var views []string
 	dynWidth := (m.width / numCols) - 2
-	if dynWidth < 20 {
-		dynWidth = 20
-	}
 
 	for i := range m.columns {
 		d := list.NewDefaultDelegate()
-
-		// --- ITEM RENDERING FIX ---
-		// Items must have the same background as the column to prevent "gaps"
-		itemStyle := lipgloss.NewStyle().
-			Background(appBgHex).
-			PaddingLeft(0).
-			MarginLeft(0)
+		itemStyle := lipgloss.NewStyle().Background(appBgHex)
 
 		d.Styles.NormalTitle = itemStyle.Copy().Foreground(whiteHex)
 		d.Styles.NormalDesc = itemStyle.Copy().Foreground(grayHex)
@@ -259,11 +248,13 @@ func (m RootModel) View() string {
 			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(pinkHex).Bold(true)
 			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(pinkHex)
 		} else {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(whiteHex).Bold(false)
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(whiteHex)
 			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(grayHex)
 		}
-
 		m.columns[i].list.SetDelegate(d)
+
+		// Başlık barını genişliğe zorla
+		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.Width(dynWidth).MaxWidth(dynWidth)
 
 		style := columnStyle.Width(dynWidth)
 		if i == m.focusedColumn {
@@ -274,26 +265,34 @@ func (m RootModel) View() string {
 
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
-	// --- FOOTER LEAKAGE FIX ---
-	var footer string
+	// --- 2. YENİ FOOTER TASARIMI ---
+
+	// Kutu Stili (Border'lı küçük alan)
+	footerBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(purpleHex). // Sütun border rengiyle uyumlu
+		Padding(0, 1).
+		Background(appBgHex)
+
+	// Dış Taşıyıcı (Satırı kaplayan ve kutuyu ortalayan alan)
+	footerContainerStyle := lipgloss.NewStyle().
+		Background(appBgHex).
+		Width(m.width).
+		Align(lipgloss.Center). // Yatayda ortalama burada
+		MarginTop(1)
+
+	var footerContent string
 	if m.state == inputState {
-		footer = "\n" + lipgloss.NewStyle().
-			Background(appBgHex).
-			Width(m.width).
-			Render(" Edit/Add: "+m.input.View())
+		footerContent = " Edit/Add: " + m.input.View()
 	} else {
-		footer = "\n" + helpStyle.
-			Width(m.width).
-			Render(" h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit")
+		footerContent = "h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit"
 	}
 
-	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)
+	footer := footerContainerStyle.Render(footerBoxStyle.Render(footerContent))
 
-	// Final render with global background wrapper
-	return baseStyle.
-		Width(m.width).
-		Height(m.height).
-		Render(
-			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullUI),
-		)
+	// 3. FİNAL BİRLEŞTİRME
+	// İçeriği sola yaslayarak birleştiriyoruz (Sağdaki sızıntı surfaceStyle ile kapanacak)
+	fullUI := lipgloss.JoinVertical(lipgloss.Left, board, footer)
+
+	return surfaceStyle.Render(fullUI)
 }

@@ -32,7 +32,8 @@ func main() {
 			inProgress,
 			done,
 		},
-		input: ti,
+		input:         ti,
+		focusedColumn: 1,
 	}
 
 	// Load existing tasks from the database into the model
@@ -45,4 +46,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-

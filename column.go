@@ -12,3 +12,4 @@ func NewColumn(title string) Column {
 	l.SetShowHelp(false)
 	return Column{list: l}
 }
+

@@ -40,6 +40,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter":
 				if m.input.Value() != "" {
+					// Burası hem yeni ekleme hem de rename sonrası ekleme için çalışır
 					m.columns[m.focusedColumn].list.InsertItem(0, NewTask(m.input.Value(), ""))
 				}
 				return m.resetState(), nil
@@ -73,6 +74,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Focus()
 			return m, nil
 
+		case "r": // Rename Task
+			if len(m.columns[m.focusedColumn].list.Items()) > 0 {
+				selected := m.columns[m.focusedColumn].list.SelectedItem().(Task)
+				m.input.SetValue(selected.title) // Mevcut başlığı kutuya yaz
+				m.state = inputState
+				m.input.Focus()
+				// Seçili olanı siliyoruz, Enter'a basınca yenisi (günceli) eklenecek
+				m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
+				return m, nil
+			}
+
 		case "d": // Delete Task
 			if len(m.columns[m.focusedColumn].list.Items()) > 0 {
 				index := m.columns[m.focusedColumn].list.Index()
@@ -83,52 +95,50 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.columns = append(m.columns, NewColumn("New Column"))
 			m.syncDimensions()
 
-		// Movement Logic (Odağın kartla beraber kayması eklendi)
-		case "ctrl+l": // Move Right
+		// Movement Logic (Yana Taşıma)
+		case "ctrl+l":
 			if m.focusedColumn < len(m.columns)-1 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
 				if selectedItem != nil {
 					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 					m.columns[m.focusedColumn+1].list.InsertItem(0, selectedItem)
-					// Fokus kartla beraber sağa kayar
 					m.focusedColumn++
 				}
 			}
 
-		case "ctrl+h": // Move Left
+		case "ctrl+h":
 			if m.focusedColumn > 0 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
 				if selectedItem != nil {
 					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 					m.columns[m.focusedColumn-1].list.InsertItem(0, selectedItem)
-					// Fokus kartla beraber sola kayar
 					m.focusedColumn--
 				}
 			}
-		case "ctrl+j": // Aşağı taşı
+
+		// Liste İçi Taşıma (Dikey)
+		case "ctrl+j":
 			curCol := &m.columns[m.focusedColumn]
 			index := curCol.list.Index()
-			items := curCol.list.Items()
-			if index < len(items)-1 {
+			if index < len(curCol.list.Items())-1 {
 				selectedItem := curCol.list.SelectedItem()
 				curCol.list.RemoveItem(index)
 				curCol.list.InsertItem(index+1, selectedItem)
-				curCol.list.Select(index + 1) // İmleci de kaydır ki takibi kolay olsun
+				curCol.list.Select(index + 1)
 			}
 
-		case "ctrl+k": // Yukarı taşı
+		case "ctrl+k":
 			curCol := &m.columns[m.focusedColumn]
 			index := curCol.list.Index()
 			if index > 0 {
 				selectedItem := curCol.list.SelectedItem()
 				curCol.list.RemoveItem(index)
 				curCol.list.InsertItem(index-1, selectedItem)
-				curCol.list.Select(index - 1) // İmleci de kaydır
+				curCol.list.Select(index - 1)
 			}
 		}
 	}
 
-	// Delegate messages to the active list (handles j/k navigation)
 	var cmd tea.Cmd
 	if len(m.columns) > 0 {
 		m.columns[m.focusedColumn].list, cmd = m.columns[m.focusedColumn].list.Update(msg)
@@ -144,13 +154,24 @@ func (m *RootModel) resetState() RootModel {
 }
 
 func (m *RootModel) syncDimensions() {
-	// Yüksekliği terminale göre ayarlıyoruz
 	colHeight := m.height - 10
+	numCols := len(m.columns)
+	if numCols == 0 {
+		return
+	}
+
+	// Sütun genişliğini dinamik hesapla
+	dynWidth := (m.width / numCols) - 5
+	if dynWidth < 20 {
+		dynWidth = 20
+	}
 
 	for i := range m.columns {
-		// Listeye stil genişliğinden biraz daha az yer veriyoruz
-		// (kenarlık ve padding payı için fixedColumnWidth-4 idealdir)
-		m.columns[i].list.SetSize(fixedColumnWidth-4, colHeight)
+		m.columns[i].list.SetSize(dynWidth, colHeight)
+		// BAŞLIKLARI ORTALA
+		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.
+			Width(dynWidth).
+			Align(lipgloss.Center)
 	}
 }
 
@@ -160,31 +181,40 @@ func (m RootModel) View() string {
 	}
 
 	var views []string
+	numCols := len(m.columns)
+	if numCols == 0 {
+		return "No columns"
+	}
+
+	// Stil genişliğini dinamik hesaplıyoruz
+	dynWidth := (m.width / numCols) - 5
+	if dynWidth < 20 {
+		dynWidth = 20
+	}
+
 	for i, col := range m.columns {
-		style := columnStyle
+		style := columnStyle.Copy().Width(dynWidth)
 		if i == m.focusedColumn {
-			style = focusedStyle
+			style = focusedStyle.Copy().Width(dynWidth)
 		}
 		views = append(views, style.Render(col.list.View()))
 	}
 
-	// 1. Sütunları yan yana birleştir
+	// Sütunları yan yana birleştir
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
-	// 2. Footer'ı hazırla
+	// Footer hazırlığı
 	var footer string
 	if m.state == inputState {
-		footer = "\n Add Task: " + m.input.View()
+		footer = "\n Düzenle/Ekle: " + m.input.View()
 	} else {
-		footer = helpStyle.Render("\n h/l: gez • j/k: nav • ctrl+h/l/j/k: taşı • a: ekle • d: sil • q: çık")
+		footer = helpStyle.Render("\n h/l: gez • j/k: nav • ctrl+h/l/j/k: taşı • a: ekle • r: rename • d: sil • q: çık")
 	}
 
-	// 3. Board ve footer'ı dikey olarak birleştir
+	// Her şeyi dikey birleştir
 	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)
 
-	// 4. MERKEZLEME MANTIĞI:
-	// Place fonksiyonu ile tüm UI'yı terminal genişliği (m.width) ve
-	// yüksekliğinin (m.height) tam ortasına yerleştiriyoruz.
+	// Tam merkezleme
 	return lipgloss.Place(
 		m.width,
 		m.height,

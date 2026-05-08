@@ -35,7 +35,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncDimensions()
 
 	case tea.KeyMsg:
-		// Logic when typing a new task (Input Mode)
+		// --- Input Mode Logic ---
 		if m.state == inputState {
 			switch msg.String() {
 			case "enter":
@@ -51,12 +51,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Normal Mode Keybindings
+		// --- Normal Mode Logic ---
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
 			return m, tea.Quit
 
+		// Column Navigation
 		case "left", "h":
 			if m.focusedColumn > 0 {
 				m.focusedColumn--
@@ -66,6 +67,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedColumn++
 			}
 
+		// Task Actions
 		case "a": // Add Task
 			m.state = inputState
 			m.input.Focus()
@@ -81,18 +83,28 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.columns = append(m.columns, NewColumn("New Column"))
 			m.syncDimensions()
 
-		case "enter": // Move Task to the Right
-			if len(m.columns) > m.focusedColumn+1 {
-				selectedTask := m.columns[m.focusedColumn].list.SelectedItem()
-				if selectedTask != nil {
+		// Movement Logic
+		case "enter": // Move Right
+			if m.focusedColumn < len(m.columns)-1 {
+				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
+				if selectedItem != nil {
 					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
-					m.columns[m.focusedColumn+1].list.InsertItem(0, selectedTask)
+					m.columns[m.focusedColumn+1].list.InsertItem(0, selectedItem)
+				}
+			}
+
+		case "backspace": // Move Left
+			if m.focusedColumn > 0 {
+				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
+				if selectedItem != nil {
+					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
+					m.columns[m.focusedColumn-1].list.InsertItem(0, selectedItem)
 				}
 			}
 		}
 	}
 
-	// Important: Pass keys (like j/k) to the focused list for navigation
+	// Delegate messages to the active list (handles j/k navigation)
 	var cmd tea.Cmd
 	if len(m.columns) > 0 {
 		m.columns[m.focusedColumn].list, cmd = m.columns[m.focusedColumn].list.Update(msg)
@@ -100,7 +112,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// resetState exits the input mode and clears the text box
 func (m *RootModel) resetState() RootModel {
 	m.input.Blur()
 	m.input.Reset()
@@ -108,11 +119,9 @@ func (m *RootModel) resetState() RootModel {
 	return *m
 }
 
-// syncDimensions recalculates column sizes based on terminal width/height
 func (m *RootModel) syncDimensions() {
 	numCols := len(m.columns)
 	if numCols > 0 {
-		// Calculate space per column subtracting borders and padding
 		colWidth := (m.width / numCols) - 6
 		colHeight := m.height - 10
 		for i := range m.columns {
@@ -137,10 +146,11 @@ func (m RootModel) View() string {
 
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
-	// Footer logic
-	footer := helpStyle.Render("\n h/l: switch col • j/k: nav • a: add • d: delete • enter: move right • q: quit")
+	var footer string
 	if m.state == inputState {
-		footer = "\n New Task: " + m.input.View() + helpStyle.Render(" (Enter to save, Esc to cancel)")
+		footer = "\n New Task: " + m.input.View() + helpStyle.Render(" (Enter: save, Esc: cancel)")
+	} else {
+		footer = helpStyle.Render("\n h/l: col • j/k: nav • enter/backspace: move • a: add • d: del • q: quit")
 	}
 
 	return board + "\n" + footer

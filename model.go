@@ -265,4 +265,3 @@ func (m RootModel) View() string {
 	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullUI)
 }
-

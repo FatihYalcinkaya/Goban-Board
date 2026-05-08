@@ -120,13 +120,13 @@ func (m *RootModel) resetState() RootModel {
 }
 
 func (m *RootModel) syncDimensions() {
-	numCols := len(m.columns)
-	if numCols > 0 {
-		colWidth := (m.width / numCols) - 6
-		colHeight := m.height - 10
-		for i := range m.columns {
-			m.columns[i].list.SetSize(colWidth, colHeight)
-		}
+	// Terminal boyutu ne olursa olsun sütunlar sabit genişlikte kalsın
+	// Ancak yüksekliği terminale göre ayarlamak mantıklıdır
+	colHeight := m.height - 10
+
+	for i := range m.columns {
+		// fixedColumnWidth stil dosyasından geliyor
+		m.columns[i].list.SetSize(fixedColumnWidth, colHeight)
 	}
 }
 

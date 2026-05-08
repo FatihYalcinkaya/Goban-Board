@@ -168,14 +168,29 @@ func (m RootModel) View() string {
 		views = append(views, style.Render(col.list.View()))
 	}
 
+	// 1. Sütunları yan yana birleştir
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
+	// 2. Footer'ı hazırla
 	var footer string
 	if m.state == inputState {
-		footer = "\n Add Task: " + m.input.View() + helpStyle.Render(" (Enter: save, Esc: cancel)")
+		footer = "\n Add Task: " + m.input.View()
 	} else {
-		footer = helpStyle.Render("\n h: move left l: move right ctrl+h: move task left ctrl+l: move task right d:delete task q:quit ")
+		footer = helpStyle.Render("\n h/l: gez • j/k: nav • ctrl+h/l/j/k: taşı • a: ekle • d: sil • q: çık")
 	}
 
-	return board + "\n" + footer
+	// 3. Board ve footer'ı dikey olarak birleştir
+	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)
+
+	// 4. MERKEZLEME MANTIĞI:
+	// Place fonksiyonu ile tüm UI'yı terminal genişliği (m.width) ve
+	// yüksekliğinin (m.height) tam ortasına yerleştiriyoruz.
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		fullUI,
+	)
 }
+

@@ -22,9 +22,7 @@ type RootModel struct {
 	quitting      bool
 	width         int
 	height        int
-	oldTitle      string
-	editingTaskID int
-	errMsg        string
+	oldTitle      string // Helper to track title changes during rename
 }
 
 func (m RootModel) Init() tea.Cmd {
@@ -44,25 +42,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if m.input.Value() != "" {
 					newTitle := m.input.Value()
+					// If oldTitle is set, we are in Rename mode
 					if m.oldTitle != "" {
-						if err := RenameTask(m.editingTaskID, newTitle); err != nil {
-							m.errMsg = "Failed to rename task"
-						}
-						idx := m.columns[m.focusedColumn].list.Index()
-						m.columns[m.focusedColumn].list.RemoveItem(idx)
-						m.columns[m.focusedColumn].list.InsertItem(idx, NewTask(m.editingTaskID, newTitle, ""))
+						RenameTask(m.oldTitle, newTitle)
+						m.columns[m.focusedColumn].list.InsertItem(0, NewTask(newTitle, ""))
+						m.oldTitle = "" // Clear after rename
 					} else {
-						id, err := SaveTask(newTitle, m.focusedColumn)
-						if err != nil {
-							m.errMsg = "Failed to save task"
-						} else {
-							m.columns[m.focusedColumn].list.InsertItem(0, NewTask(int(id), newTitle, ""))
-						}
+						// Normal Add mode
+						SaveTask(newTitle, m.focusedColumn)
+						m.columns[m.focusedColumn].list.InsertItem(0, NewTask(newTitle, ""))
 					}
 				}
 				return m.resetState(), nil
 			case "esc":
+				// If canceling a rename, restore the original item
 				if m.oldTitle != "" {
+					m.columns[m.focusedColumn].list.InsertItem(0, NewTask(m.oldTitle, ""))
 					m.oldTitle = ""
 				}
 				return m.resetState(), nil
@@ -72,13 +67,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		m.errMsg = ""
-
+		// --- Normal Mode ---
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
 			return m, tea.Quit
 
+		// Column Navigation
 		case "left", "h":
 			if m.focusedColumn > 0 {
 				m.focusedColumn--
@@ -88,6 +83,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedColumn++
 			}
 
+		// Task Actions
 		case "a":
 			m.state = inputState
 			m.input.Focus()
@@ -95,51 +91,38 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "r":
 			if len(m.columns[m.focusedColumn].list.Items()) > 0 {
-				selected, ok := m.columns[m.focusedColumn].list.SelectedItem().(Task)
-				if !ok {
-					return m, nil
-				}
-				m.editingTaskID = selected.id
-				m.oldTitle = selected.title
+				selected := m.columns[m.focusedColumn].list.SelectedItem().(Task)
+				m.oldTitle = selected.title // Store old title for DB update
 				m.input.SetValue(selected.title)
 				m.state = inputState
 				m.input.Focus()
+				// Temporarily remove to avoid duplicates; will be re-added on Enter or Esc
+				m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 				return m, nil
 			}
 
 		case "d":
 			if selectedItem := m.columns[m.focusedColumn].list.SelectedItem(); selectedItem != nil {
-				task, ok := selectedItem.(Task)
-				if !ok {
-					return m, nil
-				}
-				if err := DeleteTask(task.id); err != nil {
-					m.errMsg = "Failed to delete task"
-				} else {
-					index := m.columns[m.focusedColumn].list.Index()
-					m.columns[m.focusedColumn].list.RemoveItem(index)
-				}
+				task := selectedItem.(Task)
+				DeleteTask(task.title) // Permanent DB removal
+				index := m.columns[m.focusedColumn].list.Index()
+				m.columns[m.focusedColumn].list.RemoveItem(index)
 			}
 
 		case "n":
 			m.columns = append(m.columns, NewColumn("New Column"))
 			m.syncDimensions()
 
+		// Transfer between columns
 		case "ctrl+l":
 			if m.focusedColumn < len(m.columns)-1 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
 				if selectedItem != nil {
-					task, ok := selectedItem.(Task)
-					if !ok {
-						return m, nil
-					}
-					if err := UpdateTaskStatus(task.id, m.focusedColumn+1); err != nil {
-						m.errMsg = "Failed to move task"
-					} else {
-						m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
-						m.columns[m.focusedColumn+1].list.InsertItem(0, selectedItem)
-						m.focusedColumn++
-					}
+					task := selectedItem.(Task)
+					UpdateTaskStatus(task.title, m.focusedColumn+1) // DB Sync
+					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
+					m.columns[m.focusedColumn+1].list.InsertItem(0, selectedItem)
+					m.focusedColumn++
 				}
 			}
 
@@ -147,20 +130,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusedColumn > 0 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
 				if selectedItem != nil {
-					task, ok := selectedItem.(Task)
-					if !ok {
-						return m, nil
-					}
-					if err := UpdateTaskStatus(task.id, m.focusedColumn-1); err != nil {
-						m.errMsg = "Failed to move task"
-					} else {
-						m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
-						m.columns[m.focusedColumn-1].list.InsertItem(0, selectedItem)
-						m.focusedColumn--
-					}
+					task := selectedItem.(Task)
+					UpdateTaskStatus(task.title, m.focusedColumn-1) // DB Sync
+					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
+					m.columns[m.focusedColumn-1].list.InsertItem(0, selectedItem)
+					m.focusedColumn--
 				}
 			}
 
+		// Vertical movement (No DB change needed since order is handled by Load logic)
 		case "ctrl+j":
 			curCol := &m.columns[m.focusedColumn]
 			index := curCol.list.Index()
@@ -195,24 +173,26 @@ func (m *RootModel) resetState() RootModel {
 	m.input.Reset()
 	m.state = defaultState
 	m.oldTitle = ""
-	m.editingTaskID = 0
 	return *m
 }
-
 func (m *RootModel) syncDimensions() {
 	numCols := len(m.columns)
 	if numCols == 0 {
 		return
 	}
 
+	// Calculate net width by accounting for border and padding differences
 	dynWidth := (m.width / numCols) - 4
 	if dynWidth < 20 {
 		dynWidth = 20
 	}
 
 	for i := range m.columns {
+		// Set the physical size of the list
 		m.columns[i].list.SetSize(dynWidth, m.height-12)
 
+		// --- CRITICAL: Force styles to width ---
+		// This fills the navy gaps on the right with your gray color
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.
 			Width(dynWidth).
 			MaxWidth(dynWidth)
@@ -233,12 +213,15 @@ func (m RootModel) View() string {
 		return "No columns"
 	}
 
+	// 1. MAIN SURFACE STYLE
+	// Seals every cell of the terminal with your color
 	surfaceStyle := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height).
 		Background(appBgHex).
 		Align(lipgloss.Left, lipgloss.Top)
 
+	// UI Guard
 	minRequiredWidth := numCols * 25
 	if m.width < minRequiredWidth || m.height < 15 {
 		errorContent := lipgloss.JoinVertical(
@@ -270,6 +253,7 @@ func (m RootModel) View() string {
 		}
 		m.columns[i].list.SetDelegate(d)
 
+		// Force title bar to width
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.Width(dynWidth).MaxWidth(dynWidth)
 
 		style := columnStyle.Width(dynWidth)
@@ -281,22 +265,24 @@ func (m RootModel) View() string {
 
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
+	// --- 2. NEW FOOTER DESIGN ---
+
+	// Box Style (Small bordered area)
 	footerBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(purpleHex).
+		BorderForeground(purpleHex). // Matches column border color
 		Padding(0, 1).
 		Background(appBgHex)
 
+	// Outer Container (Covers the row and centers the box)
 	footerContainerStyle := lipgloss.NewStyle().
 		Background(appBgHex).
 		Width(m.width).
-		Align(lipgloss.Center).
+		Align(lipgloss.Center). // Horizontal centering here
 		MarginTop(1)
 
 	var footerContent string
-	if m.errMsg != "" {
-		footerContent = lipgloss.NewStyle().Foreground(pinkHex).Render("ERROR: " + m.errMsg)
-	} else if m.state == inputState {
+	if m.state == inputState {
 		footerContent = " Edit/Add: " + m.input.View()
 	} else {
 		footerContent = "h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit"
@@ -304,6 +290,8 @@ func (m RootModel) View() string {
 
 	footer := footerContainerStyle.Render(footerBoxStyle.Render(footerContent))
 
+	// 3. FINAL MERGE
+	// Merge by left-aligning content (Right-side gap will be covered by surfaceStyle)
 	fullUI := lipgloss.JoinVertical(lipgloss.Left, board, footer)
 
 	return surfaceStyle.Render(fullUI)

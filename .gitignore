@@ -1,0 +1,6 @@
+tasks.db
+/go-kanban
+/go-kanban.exe
+*.exe
+*.test
+*.out

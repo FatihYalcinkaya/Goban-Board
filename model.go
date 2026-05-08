@@ -152,26 +152,25 @@ func (m *RootModel) resetState() RootModel {
 	m.state = defaultState
 	return *m
 }
-
 func (m *RootModel) syncDimensions() {
-	colHeight := m.height - 10
 	numCols := len(m.columns)
 	if numCols == 0 {
 		return
 	}
 
-	// Sütun genişliğini dinamik hesapla
 	dynWidth := (m.width / numCols) - 5
 	if dynWidth < 20 {
 		dynWidth = 20
 	}
 
 	for i := range m.columns {
-		m.columns[i].list.SetSize(dynWidth, colHeight)
-		// BAŞLIKLARI ORTALA
+		m.columns[i].list.SetSize(dynWidth, m.height-12)
+
+		// Başlık genişliğini sütun içindeki net boşluğa eşitle.
+		// -4 birim, sağ ve sol kenarlık paylarını kurtarır.
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.
-			Width(dynWidth).
-			Align(lipgloss.Center)
+			Width(dynWidth - 4).
+			MaxWidth(dynWidth - 4) // Taşmasını engelle
 	}
 }
 
@@ -223,4 +222,3 @@ func (m RootModel) View() string {
 		fullUI,
 	)
 }
-

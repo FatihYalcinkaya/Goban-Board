@@ -43,7 +43,7 @@ func NewColumn(title string) Column {
 
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
+	l.SetFilteringEnabled(true)
 
 	return Column{list: l}
 }

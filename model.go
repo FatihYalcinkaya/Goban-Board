@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,7 +14,24 @@ type state int
 const (
 	defaultState state = iota
 	inputState
+	confirmState
+	helpState
 )
+
+type confirmAction int
+
+const (
+	confirmNone confirmAction = iota
+	confirmDeleteTask
+	confirmDeleteColumn
+)
+
+type undoItem struct {
+	task   Task
+	column int
+}
+
+const maxUndoBuffer = 20
 
 type RootModel struct {
 	columns       []Column
@@ -22,9 +41,19 @@ type RootModel struct {
 	quitting      bool
 	width         int
 	height        int
-	oldTitle      string
-	editingTaskID int
 	errMsg        string
+
+	oldTitle       string
+	editingTaskID  int
+	editingDesc    bool
+	columnRenameIdx int
+
+	confirmAction  confirmAction
+	confirmTaskID  int
+	confirmColIdx  int
+
+	columnNewCount int
+	undoBuffer     []undoItem
 }
 
 func (m RootModel) Init() tea.Cmd {
@@ -39,32 +68,106 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncDimensions()
 
 	case tea.KeyMsg:
+		if m.state == helpState {
+			switch msg.String() {
+			case "?", "esc", "q", "ctrl+c":
+				m.state = defaultState
+			}
+			return m, nil
+		}
+
+		if m.state == confirmState {
+			switch msg.String() {
+			case "y", "Y":
+				switch m.confirmAction {
+				case confirmDeleteTask:
+					for _, item := range m.columns[m.focusedColumn].list.Items() {
+						t, ok := item.(Task)
+						if ok && t.id == m.confirmTaskID {
+							m.undoBuffer = append(m.undoBuffer, undoItem{task: t, column: m.focusedColumn})
+							if len(m.undoBuffer) > maxUndoBuffer {
+								m.undoBuffer = m.undoBuffer[1:]
+							}
+							break
+						}
+					}
+					if err := DeleteTask(m.confirmTaskID); err != nil {
+						m.errMsg = "Failed to delete task"
+					} else {
+						index := m.columns[m.focusedColumn].list.Index()
+						m.columns[m.focusedColumn].list.RemoveItem(index)
+					}
+				case confirmDeleteColumn:
+					colIdx := m.confirmColIdx
+					if err := DeleteTasksByStatus(colIdx); err != nil {
+						m.errMsg = "Failed to delete column tasks"
+					}
+					if colIdx >= 0 && colIdx < len(m.columns) {
+						m.columns = append(m.columns[:colIdx], m.columns[colIdx+1:]...)
+						if m.focusedColumn >= len(m.columns) {
+							m.focusedColumn = len(m.columns) - 1
+						}
+						m.syncDimensions()
+					}
+				}
+				m.confirmAction = confirmNone
+				m.state = defaultState
+			case "n", "N", "esc":
+				m.confirmAction = confirmNone
+				m.state = defaultState
+			}
+			return m, nil
+		}
+
 		if m.state == inputState {
 			switch msg.String() {
 			case "enter":
 				if m.input.Value() != "" {
-					newTitle := m.input.Value()
-					if m.oldTitle != "" {
-						if err := RenameTask(m.editingTaskID, newTitle); err != nil {
-							m.errMsg = "Failed to rename task"
-						}
+					newVal := m.input.Value()
+					switch {
+					case m.oldTitle != "":
+						items := m.columns[m.focusedColumn].list.Items()
 						idx := m.columns[m.focusedColumn].list.Index()
-						m.columns[m.focusedColumn].list.RemoveItem(idx)
-						m.columns[m.focusedColumn].list.InsertItem(idx, NewTask(m.editingTaskID, newTitle, ""))
-					} else {
-						id, err := SaveTask(newTitle, m.focusedColumn)
+						desc := ""
+						if idx < len(items) {
+							if t, ok := items[idx].(Task); ok {
+								desc = t.description
+							}
+						}
+						if err := RenameTask(m.editingTaskID, newVal); err != nil {
+							m.errMsg = "Failed to rename task"
+						} else {
+							m.columns[m.focusedColumn].list.RemoveItem(idx)
+							m.columns[m.focusedColumn].list.InsertItem(idx, NewTask(m.editingTaskID, newVal, desc))
+						}
+					case m.editingDesc:
+						if err := UpdateTaskDescription(m.editingTaskID, newVal); err != nil {
+							m.errMsg = "Failed to update description"
+						} else {
+						for i, item := range m.columns[m.focusedColumn].list.Items() {
+							t, ok := item.(Task)
+							if ok && t.id == m.editingTaskID {
+								m.columns[m.focusedColumn].list.RemoveItem(i)
+								m.columns[m.focusedColumn].list.InsertItem(i, NewTask(t.id, t.title, newVal))
+								break
+							}
+						}
+						}
+						m.editingTaskID = 0
+					case m.columnRenameIdx >= 0:
+						m.columns[m.columnRenameIdx].list.Title = newVal
+						m.columnRenameIdx = -1
+					default:
+						id, err := SaveTask(newVal, m.focusedColumn)
 						if err != nil {
 							m.errMsg = "Failed to save task"
 						} else {
-							m.columns[m.focusedColumn].list.InsertItem(0, NewTask(int(id), newTitle, ""))
+							m.columns[m.focusedColumn].list.InsertItem(0, NewTask(int(id), newVal, ""))
 						}
 					}
 				}
 				return m.resetState(), nil
 			case "esc":
-				if m.oldTitle != "" {
-					m.oldTitle = ""
-				}
 				return m.resetState(), nil
 			}
 			var cmd tea.Cmd
@@ -73,6 +176,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.errMsg = ""
+
+		if m.columns[m.focusedColumn].list.FilterState() == list.Filtering {
+			var cmd tea.Cmd
+			m.columns[m.focusedColumn].list, cmd = m.columns[m.focusedColumn].list.Update(msg)
+			return m, cmd
+		}
 
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -90,6 +199,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "a":
 			m.state = inputState
+			m.input.Placeholder = "Enter task title..."
 			m.input.Focus()
 			return m, nil
 
@@ -101,11 +211,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.editingTaskID = selected.id
 				m.oldTitle = selected.title
+				m.input.Placeholder = "Rename task..."
 				m.input.SetValue(selected.title)
 				m.state = inputState
 				m.input.Focus()
 				return m, nil
 			}
+
+		case "R":
+			m.columnRenameIdx = m.focusedColumn
+			m.input.Placeholder = "Enter column name..."
+			m.input.SetValue(m.columns[m.focusedColumn].list.Title)
+			m.state = inputState
+			m.input.Focus()
+			return m, nil
 
 		case "d":
 			if selectedItem := m.columns[m.focusedColumn].list.SelectedItem(); selectedItem != nil {
@@ -113,16 +232,23 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !ok {
 					return m, nil
 				}
-				if err := DeleteTask(task.id); err != nil {
-					m.errMsg = "Failed to delete task"
-				} else {
-					index := m.columns[m.focusedColumn].list.Index()
-					m.columns[m.focusedColumn].list.RemoveItem(index)
-				}
+				m.state = confirmState
+				m.confirmAction = confirmDeleteTask
+				m.confirmTaskID = task.id
 			}
 
-		case "n":
-			m.columns = append(m.columns, NewColumn("New Column"))
+		case "D":
+			m.state = confirmState
+			m.confirmAction = confirmDeleteColumn
+			m.confirmColIdx = m.focusedColumn
+
+		case "n", "A":
+			m.columnNewCount++
+			title := "New Column"
+			if m.columnNewCount > 1 {
+				title = fmt.Sprintf("New Column %d", m.columnNewCount)
+			}
+			m.columns = append(m.columns, NewColumn(title))
 			m.syncDimensions()
 
 		case "ctrl+l":
@@ -180,6 +306,36 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				curCol.list.InsertItem(index-1, selectedItem)
 				curCol.list.Select(index - 1)
 			}
+
+		case "e":
+			if selectedItem := m.columns[m.focusedColumn].list.SelectedItem(); selectedItem != nil {
+				task, ok := selectedItem.(Task)
+				if !ok {
+					return m, nil
+				}
+				m.editingTaskID = task.id
+				m.editingDesc = true
+				m.input.Placeholder = "Enter description..."
+				m.input.SetValue(task.description)
+				m.state = inputState
+				m.input.Focus()
+			}
+
+		case "u":
+			if len(m.undoBuffer) > 0 {
+				last := m.undoBuffer[len(m.undoBuffer)-1]
+				m.undoBuffer = m.undoBuffer[:len(m.undoBuffer)-1]
+				newID, err := UndoDeleteTask(last.task, last.column)
+				if err != nil {
+					m.errMsg = "Failed to undo delete"
+				} else if last.column >= 0 && last.column < len(m.columns) {
+					m.columns[last.column].list.InsertItem(0, NewTask(int(newID), last.task.title, last.task.description))
+				}
+			}
+
+		case "?":
+			m.state = helpState
+			return m, nil
 		}
 	}
 
@@ -196,6 +352,8 @@ func (m *RootModel) resetState() RootModel {
 	m.state = defaultState
 	m.oldTitle = ""
 	m.editingTaskID = 0
+	m.editingDesc = false
+	m.columnRenameIdx = -1
 	return *m
 }
 
@@ -238,6 +396,10 @@ func (m RootModel) View() string {
 		Height(m.height).
 		Background(appBgHex).
 		Align(lipgloss.Left, lipgloss.Top)
+
+	if m.state == helpState {
+		return surfaceStyle.Render(m.helpView())
+	}
 
 	minRequiredWidth := numCols * 25
 	if m.width < minRequiredWidth || m.height < 15 {
@@ -294,12 +456,20 @@ func (m RootModel) View() string {
 		MarginTop(1)
 
 	var footerContent string
-	if m.errMsg != "" {
+	if m.state == confirmState {
+		switch m.confirmAction {
+		case confirmDeleteTask:
+			footerContent = " Delete task? (y/n) "
+		case confirmDeleteColumn:
+			colName := m.columns[m.focusedColumn].list.Title
+			footerContent = fmt.Sprintf(" Delete column '%s' and all its tasks? (y/n) ", colName)
+		}
+	} else if m.errMsg != "" {
 		footerContent = lipgloss.NewStyle().Foreground(pinkHex).Render("ERROR: " + m.errMsg)
 	} else if m.state == inputState {
-		footerContent = " Edit/Add: " + m.input.View()
+		footerContent = " " + m.input.View()
 	} else {
-		footerContent = "h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit"
+		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | a: add | A: col-add | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
 	}
 
 	footer := footerContainerStyle.Render(footerBoxStyle.Render(footerContent))
@@ -307,4 +477,47 @@ func (m RootModel) View() string {
 	fullUI := lipgloss.JoinVertical(lipgloss.Left, board, footer)
 
 	return surfaceStyle.Render(fullUI)
+}
+
+func (m RootModel) helpView() string {
+	help := `Keyboard Shortcuts:
+
+  Navigation:
+    h/l              Navigate columns left/right
+    j/k              Navigate tasks within a column
+
+  Tasks:
+    a                Add new task
+    r                Rename selected task
+    e                Edit description of selected task
+    d                Delete selected task (with confirmation)
+    ctrl+h/l         Move task to left/right column
+    ctrl+j/k         Reorder task up/down within column
+
+  Columns:
+    n / A            Add new column
+    R                Rename focused column
+    D                Delete focused column (with confirmation)
+
+  Other:
+    /                Search/filter tasks in focused column
+    u                Undo last deletion
+    ?                Toggle this help
+    q / ctrl+c       Quit
+
+  Press ? or esc to close this help.`
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(purpleHex).
+		Padding(1, 2).
+		Background(appBgHex).
+		Foreground(whiteHex)
+
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Background(appBgHex).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(box.Render(help))
 }

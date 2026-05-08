@@ -36,7 +36,7 @@ func InitDB() {
 }
 
 func LoadTasksFromDB(m *RootModel) {
-	rows, err := db.Query("SELECT id, title, status FROM tasks")
+	rows, err := db.Query("SELECT id, title, description, status FROM tasks")
 	if err != nil {
 		return
 	}
@@ -45,10 +45,11 @@ func LoadTasksFromDB(m *RootModel) {
 	for rows.Next() {
 		var id int
 		var title string
+		var desc string
 		var status int
-		if err := rows.Scan(&id, &title, &status); err == nil {
+		if err := rows.Scan(&id, &title, &desc, &status); err == nil {
 			if status >= 0 && status < len(m.columns) {
-				m.columns[status].list.InsertItem(len(m.columns[status].list.Items()), NewTask(id, title, ""))
+				m.columns[status].list.InsertItem(len(m.columns[status].list.Items()), NewTask(id, title, desc))
 			}
 		}
 	}
@@ -89,4 +90,29 @@ func RenameTask(id int, newTitle string) error {
 		log.Printf("Error renaming task: %v", err)
 	}
 	return err
+}
+
+func UpdateTaskDescription(id int, desc string) error {
+	_, err := db.Exec("UPDATE tasks SET description = ? WHERE id = ?", desc, id)
+	if err != nil {
+		log.Printf("Error updating task description: %v", err)
+	}
+	return err
+}
+
+func DeleteTasksByStatus(status int) error {
+	_, err := db.Exec("DELETE FROM tasks WHERE status = ?", status)
+	if err != nil {
+		log.Printf("Error deleting tasks by status: %v", err)
+	}
+	return err
+}
+
+func UndoDeleteTask(task Task, column int) (int64, error) {
+	res, err := db.Exec("INSERT INTO tasks (title, description, status) VALUES (?, ?, ?)", task.title, task.description, column)
+	if err != nil {
+		log.Printf("Error undoing delete: %v", err)
+		return 0, err
+	}
+	return res.LastInsertId()
 }

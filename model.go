@@ -176,12 +176,34 @@ func (m RootModel) View() string {
 		return ""
 	}
 
-	var views []string
 	numCols := len(m.columns)
 	if numCols == 0 {
 		return "No columns"
 	}
 
+	// --- EKRAN BOYUTU KONTROLÜ ---
+	// Her sütun için min 25 karakter genişlik ve 15 karakter yükseklik sınırı
+	minRequiredWidth := numCols * 25
+	minRequiredHeight := 15
+
+	if m.width < minRequiredWidth || m.height < minRequiredHeight {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("201")).
+			Bold(true)
+
+		subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+		content := lipgloss.JoinVertical(
+			lipgloss.Center,
+			errorStyle.Render("TERMINAL TOO SMALL"),
+			subStyle.Render("Please enlarge to view the board"),
+		)
+
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+	}
+
+	// --- RENDER MANTIĞI ---
+	var views []string
 	dynWidth := (m.width / numCols) - 5
 	if dynWidth < 20 {
 		dynWidth = 20
@@ -191,11 +213,11 @@ func (m RootModel) View() string {
 		// --- TAM MİNİMAL DELEGAT AYARI ---
 		d := list.NewDefaultDelegate()
 
-		// 1. Ortak Ayarlar: Çizgiyi ve kaymayı her durumda kapat
+		// Ortak Ayarlar: Çizgiyi ve kaymayı her durumda kapat
 		d.Styles.NormalTitle = d.Styles.NormalTitle.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("255"))
 		d.Styles.NormalDesc = d.Styles.NormalDesc.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("245"))
 
-		// Seçili stilin dikey çizgisini (BorderLeft) tamamen siliyoruz
+		// Seçili stilin dikey çizgisini ve padding'ini sıfırlıyoruz
 		d.Styles.SelectedTitle = d.Styles.SelectedTitle.
 			BorderLeft(false).
 			PaddingLeft(0).
@@ -205,7 +227,7 @@ func (m RootModel) View() string {
 			PaddingLeft(0).
 			MarginLeft(0)
 
-		// 2. Renk Ayarı: Sadece odaklanılan sütun renkli olsun
+		// Renk Ayarı: Sadece odaklanılan sütun renkli (pembe/mor) olsun
 		if i == m.focusedColumn {
 			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color("205")).Bold(true)
 			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color("205"))
@@ -216,7 +238,7 @@ func (m RootModel) View() string {
 
 		m.columns[i].list.SetDelegate(d)
 
-		// Sütun Stili
+		// Sütun Stili (Deprecated Copy kaldırıldı)
 		style := columnStyle.Width(dynWidth)
 		if i == m.focusedColumn {
 			style = focusedStyle.Width(dynWidth)
@@ -226,6 +248,7 @@ func (m RootModel) View() string {
 
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
+	// Footer (İngilizce)
 	var footer string
 	if m.state == inputState {
 		footer = "\n Edit/Add: " + m.input.View()

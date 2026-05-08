@@ -218,11 +218,11 @@ func (m RootModel) View() string {
 	minRequiredHeight := 15
 
 	// Common background style to reuse
-	baseStyle := lipgloss.NewStyle().Background(lipgloss.Color(appBgHex))
+	baseStyle := lipgloss.NewStyle().Background(appBgHex)
 
 	if m.width < minRequiredWidth || m.height < minRequiredHeight {
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(pinkHex)).Bold(true).Background(lipgloss.Color(appBgHex))
-		subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(grayHex)).Background(lipgloss.Color(appBgHex))
+		errorStyle := lipgloss.NewStyle().Foreground(pinkHex).Bold(true).Background(appBgHex)
+		subStyle := lipgloss.NewStyle().Foreground(grayHex).Background(appBgHex)
 
 		content := lipgloss.JoinVertical(
 			lipgloss.Center,
@@ -246,21 +246,21 @@ func (m RootModel) View() string {
 		// --- ITEM RENDERING FIX ---
 		// Items must have the same background as the column to prevent "gaps"
 		itemStyle := lipgloss.NewStyle().
-			Background(lipgloss.Color(appBgHex)).
+			Background(appBgHex).
 			PaddingLeft(0).
 			MarginLeft(0)
 
-		d.Styles.NormalTitle = itemStyle.Copy().Foreground(lipgloss.Color(whiteHex))
-		d.Styles.NormalDesc = itemStyle.Copy().Foreground(lipgloss.Color(grayHex))
+		d.Styles.NormalTitle = itemStyle.Copy().Foreground(whiteHex)
+		d.Styles.NormalDesc = itemStyle.Copy().Foreground(grayHex)
 		d.Styles.SelectedTitle = itemStyle.Copy().BorderLeft(false)
 		d.Styles.SelectedDesc = itemStyle.Copy().BorderLeft(false)
 
 		if i == m.focusedColumn {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color(pinkHex)).Bold(true)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color(pinkHex))
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(pinkHex).Bold(true)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(pinkHex)
 		} else {
-			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(lipgloss.Color(whiteHex)).Bold(false)
-			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(lipgloss.Color(grayHex))
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(whiteHex).Bold(false)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(grayHex)
 		}
 
 		m.columns[i].list.SetDelegate(d)
@@ -277,11 +277,14 @@ func (m RootModel) View() string {
 	// --- FOOTER LEAKAGE FIX ---
 	var footer string
 	if m.state == inputState {
-		// Ensure the input field background also matches
-		footer = baseStyle.Render("\n Edit/Add: " + m.input.View())
+		footer = "\n" + lipgloss.NewStyle().
+			Background(appBgHex).
+			Width(m.width).
+			Render(" Edit/Add: "+m.input.View())
 	} else {
-		// Wrapping the entire footer in baseStyle to kill terminal background
-		footer = baseStyle.Render("\n" + helpStyle.Render(" h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit"))
+		footer = "\n" + helpStyle.
+			Width(m.width).
+			Render(" h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit")
 	}
 
 	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)

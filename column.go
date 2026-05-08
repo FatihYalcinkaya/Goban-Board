@@ -12,7 +12,7 @@ type Column struct {
 func NewColumn(title string) Column {
 	d := list.NewDefaultDelegate()
 
-	// Satırların arka planını sabitle
+	// Set row background
 	itemStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color(appBgHex)).
 		Foreground(lipgloss.Color(whiteHex))
@@ -25,19 +25,19 @@ func NewColumn(title string) Column {
 	l := list.New([]list.Item{}, d, 0, 0)
 	l.Title = title
 
-	// --- SIZINTI KESİCİ AYARLAR ---
+	// --- LEAK STOPPER SETTINGS ---
 	l.Styles.Title = lipgloss.NewStyle().
 		Background(lipgloss.Color(purpleHex)).
 		Foreground(lipgloss.Color("#ffffff")).
 		Bold(true).
 		Padding(0, 1)
 
-	// O üç noktaların ve "No items" yazısının etrafını boya
+	// Paint around the ellipsis and "No items" text
 	l.Styles.NoItems = lipgloss.NewStyle().
 		Background(lipgloss.Color(appBgHex)).
 		Foreground(lipgloss.Color(grayHex))
 
-	// Listenin altındaki görünmez yardım alanını da boya (o alttaki sızıntı için)
+	// Also paint the invisible help area below the list (for the leak at the bottom)
 	l.Styles.HelpStyle = lipgloss.NewStyle().
 		Background(lipgloss.Color(appBgHex))
 

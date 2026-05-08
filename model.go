@@ -181,18 +181,18 @@ func (m *RootModel) syncDimensions() {
 		return
 	}
 
-	// Border ve padding farklarını düşerek net genişliği hesapla
+	// Calculate net width by accounting for border and padding differences
 	dynWidth := (m.width / numCols) - 4
 	if dynWidth < 20 {
 		dynWidth = 20
 	}
 
 	for i := range m.columns {
-		// Listenin fiziksel boyutunu ayarla
+		// Set the physical size of the list
 		m.columns[i].list.SetSize(dynWidth, m.height-12)
 
-		// --- KRİTİK: Stilleri genişliğe zorla ---
-		// Bu işlem o sağdaki lacivert boşlukları senin gri renginle doldurur
+		// --- CRITICAL: Force styles to width ---
+		// This fills the navy gaps on the right with your gray color
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.
 			Width(dynWidth).
 			MaxWidth(dynWidth)

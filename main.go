@@ -21,9 +21,6 @@ func main() {
 	inProgress := NewColumn("IN PROGRESS")
 	done := NewColumn("DONE")
 
-	// 3. Add a sample task to the Backlog to start with
-	backlog.list.InsertItem(0, NewTask("Initial Task", "This is in the backlog"))
-
 	// 4. Create the RootModel with the ordered columns
 	m := RootModel{
 		columns: []Column{

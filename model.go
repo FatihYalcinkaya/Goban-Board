@@ -83,23 +83,47 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.columns = append(m.columns, NewColumn("New Column"))
 			m.syncDimensions()
 
-		// Movement Logic
-		case "enter": // Move Right
+		// Movement Logic (Odağın kartla beraber kayması eklendi)
+		case "ctrl+l": // Move Right
 			if m.focusedColumn < len(m.columns)-1 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
 				if selectedItem != nil {
 					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 					m.columns[m.focusedColumn+1].list.InsertItem(0, selectedItem)
+					// Fokus kartla beraber sağa kayar
+					m.focusedColumn++
 				}
 			}
 
-		case "backspace": // Move Left
+		case "ctrl+h": // Move Left
 			if m.focusedColumn > 0 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
 				if selectedItem != nil {
 					m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 					m.columns[m.focusedColumn-1].list.InsertItem(0, selectedItem)
+					// Fokus kartla beraber sola kayar
+					m.focusedColumn--
 				}
+			}
+		case "ctrl+j": // Aşağı taşı
+			curCol := &m.columns[m.focusedColumn]
+			index := curCol.list.Index()
+			items := curCol.list.Items()
+			if index < len(items)-1 {
+				selectedItem := curCol.list.SelectedItem()
+				curCol.list.RemoveItem(index)
+				curCol.list.InsertItem(index+1, selectedItem)
+				curCol.list.Select(index + 1) // İmleci de kaydır ki takibi kolay olsun
+			}
+
+		case "ctrl+k": // Yukarı taşı
+			curCol := &m.columns[m.focusedColumn]
+			index := curCol.list.Index()
+			if index > 0 {
+				selectedItem := curCol.list.SelectedItem()
+				curCol.list.RemoveItem(index)
+				curCol.list.InsertItem(index-1, selectedItem)
+				curCol.list.Select(index - 1) // İmleci de kaydır
 			}
 		}
 	}
@@ -120,13 +144,13 @@ func (m *RootModel) resetState() RootModel {
 }
 
 func (m *RootModel) syncDimensions() {
-	// Terminal boyutu ne olursa olsun sütunlar sabit genişlikte kalsın
-	// Ancak yüksekliği terminale göre ayarlamak mantıklıdır
+	// Yüksekliği terminale göre ayarlıyoruz
 	colHeight := m.height - 10
 
 	for i := range m.columns {
-		// fixedColumnWidth stil dosyasından geliyor
-		m.columns[i].list.SetSize(fixedColumnWidth, colHeight)
+		// Listeye stil genişliğinden biraz daha az yer veriyoruz
+		// (kenarlık ve padding payı için fixedColumnWidth-4 idealdir)
+		m.columns[i].list.SetSize(fixedColumnWidth-4, colHeight)
 	}
 }
 
@@ -148,9 +172,9 @@ func (m RootModel) View() string {
 
 	var footer string
 	if m.state == inputState {
-		footer = "\n New Task: " + m.input.View() + helpStyle.Render(" (Enter: save, Esc: cancel)")
+		footer = "\n Add Task: " + m.input.View() + helpStyle.Render(" (Enter: save, Esc: cancel)")
 	} else {
-		footer = helpStyle.Render("\n h/l: col • j/k: nav • enter/backspace: move • a: add • d: del • q: quit")
+		footer = helpStyle.Render("\n h: move left l: move right ctrl+h: move task left ctrl+l: move task right d:delete task q:quit ")
 	}
 
 	return board + "\n" + footer

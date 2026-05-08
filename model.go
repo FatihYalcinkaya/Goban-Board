@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -40,7 +41,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter":
 				if m.input.Value() != "" {
-					// Burası hem yeni ekleme hem de rename sonrası ekleme için çalışır
 					m.columns[m.focusedColumn].list.InsertItem(0, NewTask(m.input.Value(), ""))
 				}
 				return m.resetState(), nil
@@ -69,33 +69,32 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		// Task Actions
-		case "a": // Add Task
+		case "a":
 			m.state = inputState
 			m.input.Focus()
 			return m, nil
 
-		case "r": // Rename Task
+		case "r":
 			if len(m.columns[m.focusedColumn].list.Items()) > 0 {
 				selected := m.columns[m.focusedColumn].list.SelectedItem().(Task)
-				m.input.SetValue(selected.title) // Mevcut başlığı kutuya yaz
+				m.input.SetValue(selected.title)
 				m.state = inputState
 				m.input.Focus()
-				// Seçili olanı siliyoruz, Enter'a basınca yenisi (günceli) eklenecek
 				m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 				return m, nil
 			}
 
-		case "d": // Delete Task
+		case "d":
 			if len(m.columns[m.focusedColumn].list.Items()) > 0 {
 				index := m.columns[m.focusedColumn].list.Index()
 				m.columns[m.focusedColumn].list.RemoveItem(index)
 			}
 
-		case "n": // New Column
+		case "n":
 			m.columns = append(m.columns, NewColumn("New Column"))
 			m.syncDimensions()
 
-		// Movement Logic (Yana Taşıma)
+		// Transfer Logic (Sütunlar Arası)
 		case "ctrl+l":
 			if m.focusedColumn < len(m.columns)-1 {
 				selectedItem := m.columns[m.focusedColumn].list.SelectedItem()
@@ -152,6 +151,7 @@ func (m *RootModel) resetState() RootModel {
 	m.state = defaultState
 	return *m
 }
+
 func (m *RootModel) syncDimensions() {
 	numCols := len(m.columns)
 	if numCols == 0 {
@@ -165,15 +165,12 @@ func (m *RootModel) syncDimensions() {
 
 	for i := range m.columns {
 		m.columns[i].list.SetSize(dynWidth, m.height-12)
-
-		// Başlık genişliğini sütun içindeki net boşluğa eşitle.
-		// -4 birim, sağ ve sol kenarlık paylarını kurtarır.
+		// Başlık genişliği için ince ayar
 		m.columns[i].list.Styles.Title = m.columns[i].list.Styles.Title.
 			Width(dynWidth - 4).
-			MaxWidth(dynWidth - 4) // Taşmasını engelle
+			MaxWidth(dynWidth - 4)
 	}
 }
-
 func (m RootModel) View() string {
 	if m.quitting {
 		return ""
@@ -185,40 +182,64 @@ func (m RootModel) View() string {
 		return "No columns"
 	}
 
-	// Stil genişliğini dinamik hesaplıyoruz
 	dynWidth := (m.width / numCols) - 5
 	if dynWidth < 20 {
 		dynWidth = 20
 	}
 
-	for i, col := range m.columns {
-		style := columnStyle.Copy().Width(dynWidth)
+	for i := range m.columns {
+		// --- RENK DÜZELTMESİ ---
+		// list.Model içindeki unexported delegate hatasını aşmak için
+		// her seferinde taze bir DefaultDelegate oluşturup listeye set ediyoruz.
+		d := list.NewDefaultDelegate()
+		d.Styles.NormalTitle = d.Styles.NormalTitle.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("255"))
+		d.Styles.NormalDesc = d.Styles.NormalDesc.PaddingLeft(0).MarginLeft(0).Foreground(lipgloss.Color("245"))
+
 		if i == m.focusedColumn {
-			style = focusedStyle.Copy().Width(dynWidth)
+			// Aktif Sütun
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.
+				Foreground(lipgloss.Color("205")).
+				Bold(true).
+				PaddingLeft(0).
+				MarginLeft(0)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.
+				Foreground(lipgloss.Color("205")).
+				PaddingLeft(0).
+				MarginLeft(0)
+		} else {
+			// Pasif Sütun (Seçili olsa bile beyaz)
+			d.Styles.SelectedTitle = d.Styles.SelectedTitle.
+				Foreground(lipgloss.Color("255")).
+				Bold(false).
+				PaddingLeft(0).
+				MarginLeft(0)
+			d.Styles.SelectedDesc = d.Styles.SelectedDesc.
+				Foreground(lipgloss.Color("245")).
+				PaddingLeft(0).
+				MarginLeft(0)
 		}
-		views = append(views, style.Render(col.list.View()))
+
+		// Delegatı güncelle
+		m.columns[i].list.SetDelegate(d)
+
+		style := columnStyle.Width(dynWidth)
+		if i == m.focusedColumn {
+			style = focusedStyle.Width(dynWidth)
+		}
+		views = append(views, style.Render(m.columns[i].list.View()))
 	}
 
-	// Sütunları yan yana birleştir
 	board := lipgloss.JoinHorizontal(lipgloss.Top, views...)
 
-	// Footer hazırlığı
 	var footer string
 	if m.state == inputState {
 		footer = "\n Edit/Add: " + m.input.View()
 	} else {
-		footer = helpStyle.Render("\n h/l: move | j/k: nav | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit")
+		footer = helpStyle.Render("\n h/l/j/k: move | ctrl+h/l/j/k: transfer | a: add | r: rename | d: delete | q: quit")
 	}
 
-	// Her şeyi dikey birleştir
 	fullUI := lipgloss.JoinVertical(lipgloss.Center, board, footer)
 
-	// Tam merkezleme
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		fullUI,
-	)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullUI)
 }
+

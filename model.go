@@ -232,6 +232,34 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedColumn++
 			}
 
+		case "H":
+			if m.focusedColumn > 0 {
+				other := m.focusedColumn - 1
+				if err := SwapColumnPositions(m.db, m.focusedColumn, other); err != nil {
+					m.errMsg = "Failed to swap column positions: " + err.Error()
+				} else if err := SwapTaskStatuses(m.db, m.focusedColumn, other); err != nil {
+					m.errMsg = "Failed to swap task statuses: " + err.Error()
+				} else {
+					m.columns[m.focusedColumn], m.columns[other] = m.columns[other], m.columns[m.focusedColumn]
+					m.focusedColumn = other
+					m.syncDimensions()
+				}
+			}
+
+		case "L":
+			if m.focusedColumn < len(m.columns)-1 {
+				other := m.focusedColumn + 1
+				if err := SwapColumnPositions(m.db, m.focusedColumn, other); err != nil {
+					m.errMsg = "Failed to swap column positions: " + err.Error()
+				} else if err := SwapTaskStatuses(m.db, m.focusedColumn, other); err != nil {
+					m.errMsg = "Failed to swap task statuses: " + err.Error()
+				} else {
+					m.columns[m.focusedColumn], m.columns[other] = m.columns[other], m.columns[m.focusedColumn]
+					m.focusedColumn = other
+					m.syncDimensions()
+				}
+			}
+
 		case "a":
 			m.state = inputState
 			m.input.Placeholder = "Enter task title..."
@@ -497,7 +525,7 @@ func (m RootModel) View() string {
 	} else if m.state == inputState {
 		footerContent = " " + m.input.View()
 	} else {
-		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | a: add | A: add col | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
+		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | H/L: move col | a: add | A: add col | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
 
 		contentMaxWidth := m.width - 6
 		if contentMaxWidth < 20 {
@@ -538,8 +566,9 @@ func (m RootModel) helpView() string {
     ctrl+h/l         Move task to left/right column
     ctrl+j/k         Reorder task up/down within column
 
-  Columns:
+    Columns:
     A                Add new column
+    H/L              Move focused column left/right
     R                Rename focused column
     D                Delete focused column (with confirmation)
 

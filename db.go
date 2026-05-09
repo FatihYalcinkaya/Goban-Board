@@ -144,6 +144,46 @@ func ShiftTaskStatuses(db *sql.DB, fromColIdx int) error {
 	return err
 }
 
+func SwapColumnPositions(db *sql.DB, posA, posB int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE columns SET position = -1 WHERE position = ?", posA); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE columns SET position = ? WHERE position = ?", posA, posB); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE columns SET position = ? WHERE position = -1", posB); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func SwapTaskStatuses(db *sql.DB, statusA, statusB int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE tasks SET status = -1 WHERE status = ?", statusA); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE tasks SET status = ? WHERE status = ?", statusA, statusB); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE tasks SET status = ? WHERE status = -1", statusB); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func UndoDeleteTask(db *sql.DB, task Task, column int) (int64, error) {
 	res, err := db.Exec("INSERT INTO tasks (title, description, status) VALUES (?, ?, ?)", task.title, task.description, column)
 	if err != nil {

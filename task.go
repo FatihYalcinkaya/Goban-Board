@@ -3,15 +3,14 @@ package main
 import "github.com/charmbracelet/bubbles/list"
 
 type Task struct {
-	id          int
-	title       string
-	description string
+	id    int
+	title string
 }
 
 func (t Task) Title() string       { return t.title }
-func (t Task) Description() string { return t.description }
+func (t Task) Description() string { return "" }
 func (t Task) FilterValue() string { return t.title }
 
-func NewTask(id int, title, desc string) list.Item {
-	return Task{id: id, title: title, description: desc}
+func NewTask(id int, title string) list.Item {
+	return Task{id: id, title: title}
 }

@@ -19,8 +19,7 @@ func NewColumn(title string) Column {
 
 	d.Styles.NormalTitle = itemStyle
 	d.Styles.SelectedTitle = itemStyle.Copy().Bold(true)
-	d.Styles.NormalDesc = itemStyle.Copy().Foreground(grayHex)
-	d.Styles.SelectedDesc = itemStyle.Copy().Foreground(grayHex)
+	d.ShowDescription = false
 
 	l := list.New([]list.Item{}, d, 0, 0)
 	l.Title = title

@@ -21,7 +21,6 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	CREATE TABLE IF NOT EXISTS tasks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
-		description TEXT,
 		status INTEGER NOT NULL
 	);`
 
@@ -84,7 +83,7 @@ func RenameColumn(db *sql.DB, position int, newName string) error {
 }
 
 func LoadTasksFromDB(db *sql.DB, m *RootModel) error {
-	rows, err := db.Query("SELECT id, title, description, status FROM tasks")
+	rows, err := db.Query("SELECT id, title, status FROM tasks")
 	if err != nil {
 		return err
 	}
@@ -93,13 +92,12 @@ func LoadTasksFromDB(db *sql.DB, m *RootModel) error {
 	for rows.Next() {
 		var id int
 		var title string
-		var desc string
 		var status int
-		if err := rows.Scan(&id, &title, &desc, &status); err != nil {
+		if err := rows.Scan(&id, &title, &status); err != nil {
 			continue
 		}
 		if status >= 0 && status < len(m.columns) {
-			m.columns[status].list.InsertItem(len(m.columns[status].list.Items()), NewTask(id, title, desc))
+			m.columns[status].list.InsertItem(len(m.columns[status].list.Items()), NewTask(id, title))
 		}
 	}
 
@@ -107,7 +105,7 @@ func LoadTasksFromDB(db *sql.DB, m *RootModel) error {
 }
 
 func SaveTask(db *sql.DB, title string, status int) (int64, error) {
-	res, err := db.Exec("INSERT INTO tasks (title, description, status) VALUES (?, '', ?)", title, status)
+	res, err := db.Exec("INSERT INTO tasks (title, status) VALUES (?, ?)", title, status)
 	if err != nil {
 		return 0, err
 	}
@@ -126,11 +124,6 @@ func UpdateTaskStatus(db *sql.DB, id int, newStatus int) error {
 
 func RenameTask(db *sql.DB, id int, newTitle string) error {
 	_, err := db.Exec("UPDATE tasks SET title = ? WHERE id = ?", newTitle, id)
-	return err
-}
-
-func UpdateTaskDescription(db *sql.DB, id int, desc string) error {
-	_, err := db.Exec("UPDATE tasks SET description = ? WHERE id = ?", desc, id)
 	return err
 }
 
@@ -185,7 +178,7 @@ func SwapTaskStatuses(db *sql.DB, statusA, statusB int) error {
 }
 
 func UndoDeleteTask(db *sql.DB, task Task, column int) (int64, error) {
-	res, err := db.Exec("INSERT INTO tasks (title, description, status) VALUES (?, ?, ?)", task.title, task.description, column)
+	res, err := db.Exec("INSERT INTO tasks (title, status) VALUES (?, ?)", task.title, column)
 	if err != nil {
 		return 0, err
 	}

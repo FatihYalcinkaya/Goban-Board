@@ -48,7 +48,6 @@ type RootModel struct {
 
 	oldTitle        string
 	editingTaskID   int
-	editingDesc     bool
 	columnRenameIdx int
 
 	confirmAction confirmAction
@@ -138,33 +137,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case m.oldTitle != "":
 						items := m.columns[m.focusedColumn].list.Items()
 						idx := m.columns[m.focusedColumn].list.Index()
-						desc := ""
-						if idx < len(items) {
-							if t, ok := items[idx].(Task); ok {
-								desc = t.description
-							}
-						}
 						if err := RenameTask(m.db, m.editingTaskID, newVal); err != nil {
 							m.errMsg = "Failed to rename task: " + err.Error()
 						} else {
-							items[idx] = NewTask(m.editingTaskID, newVal, desc)
+							items[idx] = NewTask(m.editingTaskID, newVal)
 							m.columns[m.focusedColumn].list.SetItems(items)
 						}
-					case m.editingDesc:
-						if err := UpdateTaskDescription(m.db, m.editingTaskID, newVal); err != nil {
-							m.errMsg = "Failed to update description: " + err.Error()
-						} else {
-							items := m.columns[m.focusedColumn].list.Items()
-							for i, item := range items {
-								t, ok := item.(Task)
-								if ok && t.id == m.editingTaskID {
-									items[i] = NewTask(t.id, t.title, newVal)
-									break
-								}
-							}
-							m.columns[m.focusedColumn].list.SetItems(items)
-						}
-						m.editingTaskID = 0
 					case m.columnRenameIdx >= 0:
 						if err := RenameColumn(m.db, m.columnRenameIdx, newVal); err != nil {
 							m.errMsg = "Failed to rename column: " + err.Error()
@@ -177,7 +155,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if err != nil {
 							m.errMsg = "Failed to save task: " + err.Error()
 						} else {
-							m.columns[m.focusedColumn].list.InsertItem(0, NewTask(int(id), newVal, ""))
+							m.columns[m.focusedColumn].list.InsertItem(0, NewTask(int(id), newVal))
 						}
 					}
 				}
@@ -368,20 +346,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				curCol.list.Select(index - 1)
 			}
 
-		case "e":
-			if selectedItem := m.columns[m.focusedColumn].list.SelectedItem(); selectedItem != nil {
-				task, ok := selectedItem.(Task)
-				if !ok {
-					return m, nil
-				}
-				m.editingTaskID = task.id
-				m.editingDesc = true
-				m.input.Placeholder = "Enter description..."
-				m.input.SetValue(task.description)
-				m.state = inputState
-				m.input.Focus()
-			}
-
 		case "u":
 			if len(m.undoBuffer) > 0 {
 				last := m.undoBuffer[len(m.undoBuffer)-1]
@@ -390,7 +354,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil {
 					m.errMsg = "Failed to undo delete: " + err.Error()
 				} else if last.column >= 0 && last.column < len(m.columns) {
-					m.columns[last.column].list.InsertItem(0, NewTask(int(newID), last.task.title, last.task.description))
+					m.columns[last.column].list.InsertItem(0, NewTask(int(newID), last.task.title))
 				}
 			}
 
@@ -413,7 +377,6 @@ func (m *RootModel) resetState() RootModel {
 	m.state = defaultState
 	m.oldTitle = ""
 	m.editingTaskID = 0
-	m.editingDesc = false
 	m.columnRenameIdx = -1
 	return *m
 }
@@ -477,14 +440,11 @@ func (m RootModel) View() string {
 
 	for i := range m.columns {
 		m.columns[i].delegate.Styles.NormalTitle = normalTitleStyle
-		m.columns[i].delegate.Styles.NormalDesc = normalDescStyle
 
 		if i == m.focusedColumn {
 			m.columns[i].delegate.Styles.SelectedTitle = focusedTitleStyle
-			m.columns[i].delegate.Styles.SelectedDesc = focusedDescStyle
 		} else {
 			m.columns[i].delegate.Styles.SelectedTitle = selectedTitleStyle
-			m.columns[i].delegate.Styles.SelectedDesc = selectedDescStyle
 		}
 		m.columns[i].list.SetDelegate(m.columns[i].delegate)
 
@@ -525,7 +485,7 @@ func (m RootModel) View() string {
 	} else if m.state == inputState {
 		footerContent = " " + m.input.View()
 	} else {
-		footerContent = "h/l/j/k: nav | ctrl+h/l/j/k: transfer | H/L: move col | a: add | A: add col | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
+		footerContent = "h/l/j/k: nav | ctrl+h/l/j/k: transfer | H/L: move col | a: add | A: add col | r: rename | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
 
 		contentMaxWidth := m.width - 6
 		if contentMaxWidth < 20 {
@@ -561,7 +521,6 @@ func (m RootModel) helpView() string {
   Tasks:
     a                Add new task
     r                Rename selected task
-    e                Edit description of selected task
     d                Delete selected task (with confirmation)
     ctrl+h/l         Move task to left/right column
     ctrl+j/k         Reorder task up/down within column

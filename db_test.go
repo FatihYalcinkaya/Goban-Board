@@ -54,33 +54,6 @@ func TestSaveAndLoadTask(t *testing.T) {
 	if task.title != "Test task" {
 		t.Fatalf("Expected title 'Test task', got '%s'", task.title)
 	}
-	if task.description != "" {
-		t.Fatalf("Expected empty description, got '%s'", task.description)
-	}
-}
-
-func TestSaveTaskWithDescription(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	id, err := SaveTask(db, "Task with desc", 0)
-	if err != nil {
-		t.Fatalf("SaveTask failed: %v", err)
-	}
-
-	if err := UpdateTaskDescription(db, int(id), "A description"); err != nil {
-		t.Fatalf("UpdateTaskDescription failed: %v", err)
-	}
-
-	m := newTestBoard()
-	if err := LoadTasksFromDB(db, m); err != nil {
-		t.Fatalf("LoadTasksFromDB failed: %v", err)
-	}
-
-	task := m.columns[0].list.Items()[0].(Task)
-	if task.description != "A description" {
-		t.Fatalf("Expected 'A description', got '%s'", task.description)
-	}
 }
 
 func TestDeleteTask(t *testing.T) {
@@ -223,7 +196,7 @@ func TestUndoDeleteTask(t *testing.T) {
 		t.Fatalf("DeleteTask failed: %v", err)
 	}
 
-	newID, err := UndoDeleteTask(db, Task{id: int(id1), title: "Task 1", description: ""}, 0)
+	newID, err := UndoDeleteTask(db, Task{id: int(id1), title: "Task 1"}, 0)
 	if err != nil {
 		t.Fatalf("UndoDeleteTask failed: %v", err)
 	}

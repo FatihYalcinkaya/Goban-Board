@@ -33,12 +33,7 @@ var (
 
 	helpStyle = lipgloss.NewStyle().Foreground(grayHex).Background(appBgHex)
 
-	normalTitleStyle = lipgloss.NewStyle().Background(appBgHex).Foreground(whiteHex)
-	normalDescStyle  = lipgloss.NewStyle().Background(appBgHex).Foreground(grayHex)
-
+	normalTitleStyle   = lipgloss.NewStyle().Background(appBgHex).Foreground(whiteHex)
 	selectedTitleStyle = lipgloss.NewStyle().Background(appBgHex).BorderLeft(false)
-	selectedDescStyle  = lipgloss.NewStyle().Background(appBgHex).BorderLeft(false)
-
-	focusedTitleStyle = lipgloss.NewStyle().Background(appBgHex).BorderLeft(false).Foreground(pinkHex).Bold(true)
-	focusedDescStyle  = lipgloss.NewStyle().Background(appBgHex).BorderLeft(false).Foreground(pinkHex)
+	focusedTitleStyle  = lipgloss.NewStyle().Background(appBgHex).BorderLeft(false).Foreground(pinkHex).Bold(true)
 )

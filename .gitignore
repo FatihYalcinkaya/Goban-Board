@@ -10,6 +10,7 @@ tasks.db-shm
 *.test
 *.out
 /vendor/
+./dist/
 
 # IDE
 .vscode/

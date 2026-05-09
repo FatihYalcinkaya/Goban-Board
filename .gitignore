@@ -4,7 +4,7 @@ tasks.db-wal
 tasks.db-shm
 
 # Build artifacts
-/go-kanban
+/goban-board
 /go-kanban.exe
 *.exe
 *.test

@@ -20,13 +20,13 @@ A minimalist, vim-inspired terminal Kanban board. Navigate everything with `hjkl
 ### Via `go install`
 
 ```bash
-go install github.com/fyalcinkaya/Goban-Board@latest
+go install github.com/FatihYalcinkaya/Goban-Board@latest
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/fyalcinkaya/Goban-Board.git
+git clone https://github.com/FatihYalcinkaya/Goban-Board.git
 cd Goban-Board
 go build -o go-kanban .
 ./go-kanban

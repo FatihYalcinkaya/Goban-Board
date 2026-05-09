@@ -525,7 +525,7 @@ func (m RootModel) View() string {
 	} else if m.state == inputState {
 		footerContent = " " + m.input.View()
 	} else {
-		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | H/L: move col | a: add | A: add col | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
+		footerContent = "h/l/j/k: nav | ctrl+h/l/j/k: transfer | H/L: move col | a: add | A: add col | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
 
 		contentMaxWidth := m.width - 6
 		if contentMaxWidth < 20 {

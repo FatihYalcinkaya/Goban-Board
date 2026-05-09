@@ -2,7 +2,7 @@
 
 ![Goban Board](assets/goban-board.png)
 
-A minimalist, vim-inspired terminal Kanban board. Navigate everything with `hjkl` — no mouse needed. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea), [Lipgloss](https://github.com/charmbracelet/lipgloss), and [SQLite](https://modernc.org/sqlite).
+Minimalist and basic vim-inspired terminal Kanban board. Navigate everything with `hjkl` — no mouse needed. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea), [Lipgloss](https://github.com/charmbracelet/lipgloss), and [SQLite](https://modernc.org/sqlite).
 
 ## Features
 

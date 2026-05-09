@@ -194,7 +194,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if len(m.columns) == 0 {
 			switch msg.String() {
-			case "n", "A":
+			case "A":
 				m.columns = append(m.columns, NewColumn("New Column"))
 				if err := SaveColumn(m.db, "New Column", 0); err != nil {
 					m.errMsg = "Failed to save column: " + err.Error()
@@ -277,7 +277,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmAction = confirmDeleteColumn
 			m.confirmColIdx = m.focusedColumn
 
-		case "n", "A":
+		case "A":
 			m.columns = append(m.columns, NewColumn(fmt.Sprintf("New Column %d", len(m.columns)+1)))
 			if err := SaveColumn(m.db, m.columns[len(m.columns)-1].list.Title, len(m.columns)-1); err != nil {
 				m.errMsg = "Failed to save column: " + err.Error()
@@ -497,7 +497,7 @@ func (m RootModel) View() string {
 	} else if m.state == inputState {
 		footerContent = " " + m.input.View()
 	} else {
-		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | a: add | A: col-add | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
+		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | a: add | A: add col | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
 
 		contentMaxWidth := m.width - 6
 		if contentMaxWidth < 20 {
@@ -539,7 +539,7 @@ func (m RootModel) helpView() string {
     ctrl+j/k         Reorder task up/down within column
 
   Columns:
-    n / A            Add new column
+    A                Add new column
     R                Rename focused column
     D                Delete focused column (with confirmation)
 

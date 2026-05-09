@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,7 +13,17 @@ import (
 func main() {
 	dbPath := os.Getenv("KANBAN_DB_PATH")
 	if dbPath == "" {
-		dbPath = "tasks.db"
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			fmt.Printf("Failed to get config directory: %v\n", err)
+			return
+		}
+		dbDir := filepath.Join(configDir, "goban board")
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			fmt.Printf("Failed to create config directory: %v\n", err)
+			return
+		}
+		dbPath = filepath.Join(dbDir, "tasks.db")
 	}
 
 	db, err := InitDB(dbPath)

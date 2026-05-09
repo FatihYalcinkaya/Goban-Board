@@ -1,9 +1,10 @@
 # Goban Board
 
-A terminal-based Kanban board written in Go. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) for the TUI, [Lipgloss](https://github.com/charmbracelet/lipgloss) for styling, and [SQLite](https://modernc.org/sqlite) for persistence.
+A minimalist, vim-inspired terminal Kanban board. Navigate everything with `hjkl` — no mouse needed. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea), [Lipgloss](https://github.com/charmbracelet/lipgloss), and [SQLite](https://modernc.org/sqlite).
 
 ## Features
 
+- Vim-style navigation (`hjkl`)
 - Add, rename, and delete tasks
 - Move tasks between columns
 - Reorder tasks within columns
@@ -12,6 +13,7 @@ A terminal-based Kanban board written in Go. Built with [Bubbletea](https://gith
 - Search/filter tasks within a column
 - Persistent storage via SQLite
 - Pure Go — no CGO required
+- Single binary, minimal dependencies
 
 ## Installation
 
@@ -32,7 +34,7 @@ go build -o go-kanban .
 
 ## Usage
 
-### Keybindings
+### Keybindings (vim-style)
 
 | Key | Action |
 |---|---|
@@ -61,7 +63,7 @@ export KANBAN_DB_PATH=/path/to/custom.db
 ./go-kanban
 ```
 
-Defaults to `tasks.db` in the current directory.
+Defaults to `~/.config/goban board/tasks.db`.
 
 ## License
 

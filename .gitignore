@@ -1,6 +1,23 @@
+# Database
 tasks.db
+tasks.db-wal
+tasks.db-shm
+
+# Build artifacts
 /go-kanban
 /go-kanban.exe
 *.exe
 *.test
 *.out
+/vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

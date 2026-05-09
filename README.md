@@ -12,7 +12,6 @@ A minimalist, vim-inspired terminal Kanban board. Navigate everything with `hjkl
 - Reorder tasks within columns
 - Add, rename, delete, and reorder columns
 - Undo task deletion
-- Search/filter tasks within a column
 - Persistent storage via SQLite
 - Pure Go — no CGO required
 - Single binary, minimal dependencies

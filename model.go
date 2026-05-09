@@ -329,21 +329,33 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+j":
 			curCol := &m.columns[m.focusedColumn]
 			index := curCol.list.Index()
-			if index < len(curCol.list.Items())-1 {
+			items := curCol.list.Items()
+			if index < len(items)-1 {
+				taskA := items[index].(Task)
+				taskB := items[index+1].(Task)
 				selectedItem := curCol.list.SelectedItem()
 				curCol.list.RemoveItem(index)
 				curCol.list.InsertItem(index+1, selectedItem)
 				curCol.list.Select(index + 1)
+				if err := SwapTaskPositions(m.db, taskA.id, taskB.id); err != nil {
+					m.errMsg = "Failed to persist position: " + err.Error()
+				}
 			}
 
 		case "ctrl+k":
 			curCol := &m.columns[m.focusedColumn]
 			index := curCol.list.Index()
+			items := curCol.list.Items()
 			if index > 0 {
+				taskA := items[index].(Task)
+				taskB := items[index-1].(Task)
 				selectedItem := curCol.list.SelectedItem()
 				curCol.list.RemoveItem(index)
 				curCol.list.InsertItem(index-1, selectedItem)
 				curCol.list.Select(index - 1)
+				if err := SwapTaskPositions(m.db, taskA.id, taskB.id); err != nil {
+					m.errMsg = "Failed to persist position: " + err.Error()
+				}
 			}
 
 		case "u":

@@ -17,15 +17,14 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	query := `
+	taskQuery := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
 		status INTEGER NOT NULL
 	);`
 
-	_, err = db.Exec(query)
-	if err != nil {
+	if _, err := db.Exec(taskQuery); err != nil {
 		return nil, err
 	}
 
@@ -36,8 +35,15 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		position INTEGER NOT NULL
 	);`
 
-	_, err = db.Exec(colQuery)
-	if err != nil {
+	if _, err := db.Exec(colQuery); err != nil {
+		return nil, err
+	}
+
+	if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN position INTEGER NOT NULL DEFAULT 0"); err != nil {
+		// Column may already exist in older databases, ignore
+	}
+
+	if _, err := db.Exec("UPDATE tasks SET position = id WHERE position = 0"); err != nil {
 		return nil, err
 	}
 
@@ -83,7 +89,7 @@ func RenameColumn(db *sql.DB, position int, newName string) error {
 }
 
 func LoadTasksFromDB(db *sql.DB, m *RootModel) error {
-	rows, err := db.Query("SELECT id, title, status FROM tasks")
+	rows, err := db.Query("SELECT id, title, status FROM tasks ORDER BY status, position ASC")
 	if err != nil {
 		return err
 	}
@@ -105,8 +111,20 @@ func LoadTasksFromDB(db *sql.DB, m *RootModel) error {
 }
 
 func SaveTask(db *sql.DB, title string, status int) (int64, error) {
-	res, err := db.Exec("INSERT INTO tasks (title, status) VALUES (?, ?)", title, status)
+	tx, err := db.Begin()
 	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE tasks SET position = position + 1 WHERE status = ?", status); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec("INSERT INTO tasks (title, status, position) VALUES (?, ?, 0)", title, status)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
@@ -118,8 +136,19 @@ func DeleteTask(db *sql.DB, id int) error {
 }
 
 func UpdateTaskStatus(db *sql.DB, id int, newStatus int) error {
-	_, err := db.Exec("UPDATE tasks SET status = ? WHERE id = ?", newStatus, id)
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE tasks SET position = position + 1 WHERE status = ?", newStatus); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE tasks SET status = ?, position = 0 WHERE id = ?", newStatus, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func RenameTask(db *sql.DB, id int, newTitle string) error {
@@ -177,9 +206,46 @@ func SwapTaskStatuses(db *sql.DB, statusA, statusB int) error {
 	return tx.Commit()
 }
 
-func UndoDeleteTask(db *sql.DB, task Task, column int) (int64, error) {
-	res, err := db.Exec("INSERT INTO tasks (title, status) VALUES (?, ?)", task.title, column)
+func SwapTaskPositions(db *sql.DB, idA, idB int) error {
+	var posA, posB int
+	if err := db.QueryRow("SELECT position FROM tasks WHERE id = ?", idA).Scan(&posA); err != nil {
+		return err
+	}
+	if err := db.QueryRow("SELECT position FROM tasks WHERE id = ?", idB).Scan(&posB); err != nil {
+		return err
+	}
+
+	tx, err := db.Begin()
 	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE tasks SET position = ? WHERE id = ?", posB, idA); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE tasks SET position = ? WHERE id = ?", posA, idB); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func UndoDeleteTask(db *sql.DB, task Task, column int) (int64, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE tasks SET position = position + 1 WHERE status = ?", column); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec("INSERT INTO tasks (title, status, position) VALUES (?, ?, 0)", task.title, column)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()

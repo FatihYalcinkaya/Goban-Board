@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -493,6 +494,22 @@ func (m RootModel) View() string {
 		footerContent = " " + m.input.View()
 	} else {
 		footerContent = "h/l: nav | j/k: move | ctrl+h/l/j/k: transfer | a: add | A: col-add | r: rename | e: desc | d: delete | R: col-rename | D: col-del | u: undo | ?: help | q: quit"
+
+		contentMaxWidth := m.width - 6
+		if contentMaxWidth < 20 {
+			contentMaxWidth = 20
+		}
+		if len(footerContent) > contentMaxWidth {
+			var lines []string
+			for i := 0; i < len(footerContent); i += contentMaxWidth {
+				end := i + contentMaxWidth
+				if end > len(footerContent) {
+					end = len(footerContent)
+				}
+				lines = append(lines, footerContent[i:end])
+			}
+			footerContent = strings.Join(lines, "\n")
+		}
 	}
 
 	footer := footerContainerStyle.Render(footerBoxStyle.Render(footerContent))

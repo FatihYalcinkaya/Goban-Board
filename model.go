@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -35,6 +36,7 @@ type undoItem struct {
 const maxUndoBuffer = 20
 
 type RootModel struct {
+	db            *sql.DB
 	columns       []Column
 	focusedColumn int
 	state         state
@@ -53,8 +55,7 @@ type RootModel struct {
 	confirmTaskID int
 	confirmColIdx int
 
-	columnNewCount int
-	undoBuffer     []undoItem
+	undoBuffer []undoItem
 }
 
 func (m RootModel) Init() tea.Cmd {
@@ -92,16 +93,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							break
 						}
 					}
-					if err := DeleteTask(m.confirmTaskID); err != nil {
-						m.errMsg = "Failed to delete task"
+					if err := DeleteTask(m.db, m.confirmTaskID); err != nil {
+						m.errMsg = "Failed to delete task: " + err.Error()
 					} else {
 						index := m.columns[m.focusedColumn].list.Index()
 						m.columns[m.focusedColumn].list.RemoveItem(index)
 					}
 				case confirmDeleteColumn:
 					colIdx := m.confirmColIdx
-					if err := DeleteTasksByStatus(colIdx); err != nil {
-						m.errMsg = "Failed to delete column tasks"
+					if err := DeleteTasksByStatus(m.db, colIdx); err != nil {
+						m.errMsg = "Failed to delete column tasks: " + err.Error()
+					} else if err := ShiftTaskStatuses(m.db, colIdx); err != nil {
+						m.errMsg = "Failed to reindex remaining tasks: " + err.Error()
+					} else if err := DeleteColumnByPosition(m.db, colIdx); err != nil {
+						m.errMsg = "Failed to delete column: " + err.Error()
+					} else if err := ShiftColumnPositions(m.db, colIdx); err != nil {
+						m.errMsg = "Failed to reindex columns: " + err.Error()
 					}
 					if colIdx >= 0 && colIdx < len(m.columns) {
 						m.columns = append(m.columns[:colIdx], m.columns[colIdx+1:]...)
@@ -137,33 +144,38 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								desc = t.description
 							}
 						}
-						if err := RenameTask(m.editingTaskID, newVal); err != nil {
-							m.errMsg = "Failed to rename task"
+						if err := RenameTask(m.db, m.editingTaskID, newVal); err != nil {
+							m.errMsg = "Failed to rename task: " + err.Error()
 						} else {
-							m.columns[m.focusedColumn].list.RemoveItem(idx)
-							m.columns[m.focusedColumn].list.InsertItem(idx, NewTask(m.editingTaskID, newVal, desc))
+							items[idx] = NewTask(m.editingTaskID, newVal, desc)
+							m.columns[m.focusedColumn].list.SetItems(items)
 						}
 					case m.editingDesc:
-						if err := UpdateTaskDescription(m.editingTaskID, newVal); err != nil {
-							m.errMsg = "Failed to update description"
+						if err := UpdateTaskDescription(m.db, m.editingTaskID, newVal); err != nil {
+							m.errMsg = "Failed to update description: " + err.Error()
 						} else {
-							for i, item := range m.columns[m.focusedColumn].list.Items() {
+							items := m.columns[m.focusedColumn].list.Items()
+							for i, item := range items {
 								t, ok := item.(Task)
 								if ok && t.id == m.editingTaskID {
-									m.columns[m.focusedColumn].list.RemoveItem(i)
-									m.columns[m.focusedColumn].list.InsertItem(i, NewTask(t.id, t.title, newVal))
+									items[i] = NewTask(t.id, t.title, newVal)
 									break
 								}
 							}
+							m.columns[m.focusedColumn].list.SetItems(items)
 						}
 						m.editingTaskID = 0
 					case m.columnRenameIdx >= 0:
-						m.columns[m.columnRenameIdx].list.Title = newVal
+						if err := RenameColumn(m.db, m.columnRenameIdx, newVal); err != nil {
+							m.errMsg = "Failed to rename column: " + err.Error()
+						} else {
+							m.columns[m.columnRenameIdx].list.Title = newVal
+						}
 						m.columnRenameIdx = -1
 					default:
-						id, err := SaveTask(newVal, m.focusedColumn)
+						id, err := SaveTask(m.db, newVal, m.focusedColumn)
 						if err != nil {
-							m.errMsg = "Failed to save task"
+							m.errMsg = "Failed to save task: " + err.Error()
 						} else {
 							m.columns[m.focusedColumn].list.InsertItem(0, NewTask(int(id), newVal, ""))
 						}
@@ -183,12 +195,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.columns) == 0 {
 			switch msg.String() {
 			case "n", "A":
-				m.columnNewCount++
-				title := "New Column"
-				if m.columnNewCount > 1 {
-					title = fmt.Sprintf("New Column %d", m.columnNewCount)
+				m.columns = append(m.columns, NewColumn("New Column"))
+				if err := SaveColumn(m.db, "New Column", 0); err != nil {
+					m.errMsg = "Failed to save column: " + err.Error()
 				}
-				m.columns = append(m.columns, NewColumn(title))
 				m.focusedColumn = 0
 				m.syncDimensions()
 				return m, nil
@@ -268,12 +278,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmColIdx = m.focusedColumn
 
 		case "n", "A":
-			m.columnNewCount++
-			title := "New Column"
-			if m.columnNewCount > 1 {
-				title = fmt.Sprintf("New Column %d", m.columnNewCount)
+			m.columns = append(m.columns, NewColumn(fmt.Sprintf("New Column %d", len(m.columns)+1)))
+			if err := SaveColumn(m.db, m.columns[len(m.columns)-1].list.Title, len(m.columns)-1); err != nil {
+				m.errMsg = "Failed to save column: " + err.Error()
 			}
-			m.columns = append(m.columns, NewColumn(title))
 			m.syncDimensions()
 
 		case "ctrl+l":
@@ -284,8 +292,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if !ok {
 						return m, nil
 					}
-					if err := UpdateTaskStatus(task.id, m.focusedColumn+1); err != nil {
-						m.errMsg = "Failed to move task"
+					if err := UpdateTaskStatus(m.db, task.id, m.focusedColumn+1); err != nil {
+						m.errMsg = "Failed to move task: " + err.Error()
 					} else {
 						m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 						m.columns[m.focusedColumn+1].list.InsertItem(0, selectedItem)
@@ -302,8 +310,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if !ok {
 						return m, nil
 					}
-					if err := UpdateTaskStatus(task.id, m.focusedColumn-1); err != nil {
-						m.errMsg = "Failed to move task"
+					if err := UpdateTaskStatus(m.db, task.id, m.focusedColumn-1); err != nil {
+						m.errMsg = "Failed to move task: " + err.Error()
 					} else {
 						m.columns[m.focusedColumn].list.RemoveItem(m.columns[m.focusedColumn].list.Index())
 						m.columns[m.focusedColumn-1].list.InsertItem(0, selectedItem)
@@ -350,9 +358,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.undoBuffer) > 0 {
 				last := m.undoBuffer[len(m.undoBuffer)-1]
 				m.undoBuffer = m.undoBuffer[:len(m.undoBuffer)-1]
-				newID, err := UndoDeleteTask(last.task, last.column)
+				newID, err := UndoDeleteTask(m.db, last.task, last.column)
 				if err != nil {
-					m.errMsg = "Failed to undo delete"
+					m.errMsg = "Failed to undo delete: " + err.Error()
 				} else if last.column >= 0 && last.column < len(m.columns) {
 					m.columns[last.column].list.InsertItem(0, NewTask(int(newID), last.task.title, last.task.description))
 				}
@@ -440,19 +448,15 @@ func (m RootModel) View() string {
 	dynWidth := (m.width / numCols) - 2
 
 	for i := range m.columns {
-		itemStyle := lipgloss.NewStyle().Background(appBgHex)
-
-		m.columns[i].delegate.Styles.NormalTitle = itemStyle.Copy().Foreground(whiteHex)
-		m.columns[i].delegate.Styles.NormalDesc = itemStyle.Copy().Foreground(grayHex)
-		m.columns[i].delegate.Styles.SelectedTitle = itemStyle.Copy().BorderLeft(false)
-		m.columns[i].delegate.Styles.SelectedDesc = itemStyle.Copy().BorderLeft(false)
+		m.columns[i].delegate.Styles.NormalTitle = normalTitleStyle
+		m.columns[i].delegate.Styles.NormalDesc = normalDescStyle
 
 		if i == m.focusedColumn {
-			m.columns[i].delegate.Styles.SelectedTitle = m.columns[i].delegate.Styles.SelectedTitle.Foreground(pinkHex).Bold(true)
-			m.columns[i].delegate.Styles.SelectedDesc = m.columns[i].delegate.Styles.SelectedDesc.Foreground(pinkHex)
+			m.columns[i].delegate.Styles.SelectedTitle = focusedTitleStyle
+			m.columns[i].delegate.Styles.SelectedDesc = focusedDescStyle
 		} else {
-			m.columns[i].delegate.Styles.SelectedTitle = m.columns[i].delegate.Styles.SelectedTitle.Foreground(whiteHex)
-			m.columns[i].delegate.Styles.SelectedDesc = m.columns[i].delegate.Styles.SelectedDesc.Foreground(grayHex)
+			m.columns[i].delegate.Styles.SelectedTitle = selectedTitleStyle
+			m.columns[i].delegate.Styles.SelectedDesc = selectedDescStyle
 		}
 		m.columns[i].list.SetDelegate(m.columns[i].delegate)
 
